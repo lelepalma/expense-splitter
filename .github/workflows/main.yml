@@ -27,11 +27,10 @@ jobs:
           npm install react-scripts
           
       - name: Build
-        run: npm run build
-        
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        
+        run: |
+          npm run build
+          touch ./build/.nojekyll
+          
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
