@@ -7,20 +7,22 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18.x
           cache: 'npm'
           
       - name: Install dependencies
-        run: npm install
-        
+        run: |
+          npm install
+          npm install react-scripts
+          
       - name: Build
         run: npm run build
         
