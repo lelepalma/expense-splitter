@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const ExpenseSplitter = () => {
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
@@ -19,6 +21,79 @@ const ExpenseSplitter = () => {
     splitType: 'equal'
   });
   const [exportStatus, setExportStatus] = useState('');
+
+  const exportToPdf = async () => {
+    setExportStatus('Exporting...');
+    try {
+      const doc = new jsPDF();
+
+      // Expenses Ledger Table
+      const expenseHeaders = ["Date", "Payee", "Description", "Amount", ...participants];
+      const expenseRows = expenses.map(expense => {
+        const row = [
+          expense.date,
+          expense.payee,
+          expense.description,
+          expense.amount.toFixed(2),
+        ];
+        participants.forEach(p => {
+          const splitAmount = expense.splits[p];
+          if (splitAmount !== undefined) {
+            row.push(splitAmount.toFixed(2));
+          } else {
+            // If a participant was added after an expense, they might not be in its splits
+            // Or if the expense was not split with them
+            row.push('0.00');
+          }
+        });
+        return row;
+      });
+
+      doc.autoTable({
+        head: [expenseHeaders],
+        body: expenseRows,
+        startY: 20,
+        headStyles: { fillColor: [79, 70, 229] }, // Indigo color for header
+        styles: { fontSize: 8 },
+        columnStyles: {
+          3: { halign: 'right' }, // Amount column
+           // Align participant split amounts to the right
+          ...Object.fromEntries(participants.map((_, i) => [4 + i, { halign: 'right' }]))
+        }
+      });
+
+      // Settlement Summary Table
+      if (settlements.length > 0) {
+        const settlementHeaders = ["From", "To", "Amount"];
+        const settlementRows = settlements.map(settlement => [
+          settlement.from,
+          settlement.to,
+          settlement.amount.toFixed(2)
+        ]);
+
+        doc.autoTable({
+          head: [settlementHeaders],
+          body: settlementRows,
+          startY: doc.lastAutoTable.finalY + 10,
+          headStyles: { fillColor: [22, 163, 74] }, // Green color for header
+          styles: { fontSize: 8 },
+          columnStyles: {
+            2: { halign: 'right' } // Amount column
+          }
+        });
+      } else {
+        doc.text("No settlements needed - everyone is even!", 14, doc.lastAutoTable.finalY + 10);
+      }
+
+      doc.save('expense_report.pdf');
+      setExportStatus('✅ PDF exported!');
+    } catch (error) {
+      console.error('PDF Export failed:', error);
+      setExportStatus('❌ Export failed');
+    } finally {
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  };
 
   // Calculate balances
   const balances = useMemo(() => {
@@ -145,58 +220,58 @@ const ExpenseSplitter = () => {
     setExpenses(expenses.filter(e => e.id !== id));
   };
 
-  const exportData = async () => {
-    try {
-      const data = {
-        participants,
-        expenses,
-        balances,
-        settlements,
-        exportDate: new Date().toISOString(),
-        totalExpenses: expenses.reduce((sum, e) => sum + e.amount, 0)
-      };
+  // const exportData = async () => { // Commenting out old exportData
+  //   try {
+  //     const data = {
+  //       participants,
+  //       expenses,
+  //       balances,
+  //       settlements,
+  //       exportDate: new Date().toISOString(),
+  //       totalExpenses: expenses.reduce((sum, e) => sum + e.amount, 0)
+  //     };
       
-      const jsonString = JSON.stringify(data, null, 2);
+  //     const jsonString = JSON.stringify(data, null, 2);
       
-      setExportStatus('Exporting...');
+  //     setExportStatus('Exporting...');
       
-      // For mobile compatibility, try clipboard first
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        try {
-          await navigator.clipboard.writeText(jsonString);
-          setExportStatus('✅ Data copied to clipboard!');
-          setTimeout(() => setExportStatus(''), 3000);
-          return;
-        } catch (clipboardErr) {
-          console.log('Clipboard failed, trying other methods');
-        }
-      }
+  //     // For mobile compatibility, try clipboard first
+  //     if (navigator.clipboard && navigator.clipboard.writeText) {
+  //       try {
+  //         await navigator.clipboard.writeText(jsonString);
+  //         setExportStatus('✅ Data copied to clipboard!');
+  //         setTimeout(() => setExportStatus(''), 3000);
+  //         return;
+  //       } catch (clipboardErr) {
+  //         console.log('Clipboard failed, trying other methods');
+  //       }
+  //     }
       
-      // Try Web Share API if available (mobile)
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: 'Expense Split Data',
-            text: jsonString
-          });
-          setExportStatus('✅ Data shared successfully!');
-          setTimeout(() => setExportStatus(''), 3000);
-          return;
-        } catch (shareErr) {
-          console.log('Share failed, showing modal');
-        }
-      }
+  //     // Try Web Share API if available (mobile)
+  //     if (navigator.share) {
+  //       try {
+  //         await navigator.share({
+  //           title: 'Expense Split Data',
+  //           text: jsonString
+  //         });
+  //         setExportStatus('✅ Data shared successfully!');
+  //         setTimeout(() => setExportStatus(''), 3000);
+  //         return;
+  //       } catch (shareErr) {
+  //         console.log('Share failed, showing modal');
+  //       }
+  //     }
       
-      // Fallback: show modal with data
-      showExportModal(jsonString);
-      setExportStatus('');
+  //     // Fallback: show modal with data
+  //     showExportModal(jsonString);
+  //     setExportStatus('');
       
-    } catch (error) {
-      console.error('Export failed:', error);
-      setExportStatus('❌ Export failed');
-      setTimeout(() => setExportStatus(''), 3000);
-    }
-  };
+  //   } catch (error) {
+  //     console.error('Export failed:', error);
+  //     setExportStatus('❌ Export failed');
+  //     setTimeout(() => setExportStatus(''), 3000);
+  //   }
+  // };
 
   const showExportModal = (jsonString) => {
     const modal = document.createElement('div');
@@ -267,15 +342,19 @@ const ExpenseSplitter = () => {
                 Import
               </button>
               <button
-                onClick={exportData}
+                onClick={exportToPdf}
                 disabled={exportStatus === 'Exporting...'}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg transition-colors"
               >
                 <Download size={18} />
-                Export
+                Export PDF
               </button>
               {exportStatus && (
-                <div className="flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg text-sm">
+                <div className={`flex items-center px-3 py-2 rounded-lg text-sm ${
+                  exportStatus.startsWith('✅') ? 'bg-green-100 text-green-800' :
+                  exportStatus.startsWith('❌') ? 'bg-red-100 text-red-800' :
+                  'bg-blue-100 text-blue-800' // For 'Exporting...'
+                }`}>
                   {exportStatus}
                 </div>
               )}
