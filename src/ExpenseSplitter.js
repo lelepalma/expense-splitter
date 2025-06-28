@@ -29,6 +29,11 @@ const ExpenseSplitter = () => {
 
       // Expenses Ledger Table
       const expenseHeaders = ["Date", "Payee", "Description", "Amount", ...participants];
+
+      // PDF-specific calculation for display
+      const pdfParticipantTotals = {};
+      participants.forEach(p => { pdfParticipantTotals[p] = 0; });
+
       const expenseRows = expenses.map(expense => {
         const row = [
           expense.date,
@@ -36,13 +41,21 @@ const ExpenseSplitter = () => {
           expense.description,
           `€ ${expense.amount.toFixed(2)}`, // EUR formatting with space
         ];
-        participants.forEach(p => {
-          const splitAmount = expense.splits[p];
-          if (splitAmount !== undefined) {
-            row.push(`€ ${splitAmount.toFixed(2)}`); // EUR formatting with space
-          } else {
-            row.push('€ 0.00'); // EUR formatting with space
+
+        const n = participants.length;
+        const baseShare = n > 0 ? expense.amount / n : 0;
+
+        participants.forEach(p_inner => {
+          let pdfDisplayValue = 0;
+          if (n > 0) { // Avoid division by zero if no participants somehow
+            if (p_inner === expense.payee) {
+              pdfDisplayValue = baseShare * (n - 1);
+            } else {
+              pdfDisplayValue = -baseShare;
+            }
           }
+          pdfParticipantTotals[p_inner] += pdfDisplayValue;
+          row.push(`€ ${pdfDisplayValue.toFixed(2)}`);
         });
         return row;
       });
@@ -51,26 +64,25 @@ const ExpenseSplitter = () => {
       doc.setFontSize(14);
       doc.text("Expenses", 14, 15);
 
-      // Prepare Total Balance Row
+      // Prepare Total Balance Row for PDF display
       const totalExpensesSum = expenses.reduce((sum, e) => sum + e.amount, 0);
-      const participantBalanceStrings = participants.map(p => {
-        const balance = balances[p] || 0; // Use balances state, default to 0 if undefined
-        return `€ ${balance.toFixed(2)}`;
+      const pdfParticipantTotalStrings = participants.map(p => {
+        return `€ ${pdfParticipantTotals[p].toFixed(2)}`;
       });
 
       const totalBalanceRow = [
         '', // Date
         '', // Payee
-        { content: 'Total Balance:', styles: { halign: 'right', fontStyle: 'bold'} }, // Description (align text to right for label)
-        { content: `€ ${totalExpensesSum.toFixed(2)}`, styles: { fontStyle: 'bold'} }, // Amount
-        ...participantBalanceStrings.map(balStr => ({ content: balStr, styles: { fontStyle: 'bold'} })) // Participant balances
+        { content: 'Total Balance:', styles: { halign: 'right', fontStyle: 'bold'} }, // Description
+        { content: `€ ${totalExpensesSum.toFixed(2)}`, styles: { fontStyle: 'bold'} }, // Amount (Overall total)
+        ...pdfParticipantTotalStrings.map(balStr => ({ content: balStr, styles: { fontStyle: 'bold'} })) // PDF specific totals
       ];
 
       const finalExpenseRows = [...expenseRows, totalBalanceRow];
 
       doc.autoTable({
         head: [expenseHeaders],
-        body: finalExpenseRows, // Use rows with total balance
+        body: finalExpenseRows, // Use rows with PDF-specific display logic and totals
         startY: 22, // Adjusted for title
         headStyles: { halign: 'center', fillColor: [22, 160, 133] },
         styles: { fontSize: 8, halign: 'center' },
