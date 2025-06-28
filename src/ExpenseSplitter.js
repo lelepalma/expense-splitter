@@ -512,12 +512,12 @@ const ExpenseSplitter = () => {
               {settlements.map((settlement, index) => (
                 <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-green-50 rounded-lg border">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                      <span className="text-red-600 font-semibold text-sm">{settlement.from[0]}</span>
+                    <div className="w-auto px-3 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-red-600 font-semibold text-sm">{settlement.from}</span>
                     </div>
                     <span className="text-gray-600">owes</span>
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <span className="text-green-600 font-semibold text-sm">{settlement.to[0]}</span>
+                    <div className="w-auto px-3 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 font-semibold text-sm">{settlement.to}</span>
                     </div>
                   </div>
                   <div className="text-right">
