@@ -34,16 +34,14 @@ const ExpenseSplitter = () => {
           expense.date,
           expense.payee,
           expense.description,
-          expense.amount.toFixed(2),
+          `€${expense.amount.toFixed(2)}`, // EUR formatting
         ];
         participants.forEach(p => {
           const splitAmount = expense.splits[p];
           if (splitAmount !== undefined) {
-            row.push(splitAmount.toFixed(2));
+            row.push(`€${splitAmount.toFixed(2)}`); // EUR formatting
           } else {
-            // If a participant was added after an expense, they might not be in its splits
-            // Or if the expense was not split with them
-            row.push('0.00');
+            row.push('€0.00'); // EUR formatting
           }
         });
         return row;
@@ -53,13 +51,8 @@ const ExpenseSplitter = () => {
         head: [expenseHeaders],
         body: expenseRows,
         startY: 20,
-        headStyles: { fillColor: [79, 70, 229] }, // Indigo color for header
-        styles: { fontSize: 8 },
-        columnStyles: {
-          3: { halign: 'right' }, // Amount column
-           // Align participant split amounts to the right
-          ...Object.fromEntries(participants.map((_, i) => [4 + i, { halign: 'right' }]))
-        }
+        headStyles: { halign: 'center', fillColor: [22, 160, 133] }, // Center align headers and new color
+        styles: { fontSize: 8, halign: 'center' }, // Center align body cells
       });
 
       // Settlement Summary Table
@@ -68,21 +61,22 @@ const ExpenseSplitter = () => {
         const settlementRows = settlements.map(settlement => [
           settlement.from,
           settlement.to,
-          settlement.amount.toFixed(2)
+          `€${settlement.amount.toFixed(2)}` // EUR formatting
         ]);
 
         doc.autoTable({
           head: [settlementHeaders],
           body: settlementRows,
           startY: doc.lastAutoTable.finalY + 10,
-          headStyles: { fillColor: [22, 163, 74] }, // Green color for header
-          styles: { fontSize: 8 },
-          columnStyles: {
-            2: { halign: 'right' } // Amount column
-          }
+          headStyles: { halign: 'center', fillColor: [22, 160, 133] }, // Center align headers and new color
+          styles: { fontSize: 8, halign: 'center' }, // Center align body cells
         });
       } else {
-        doc.text("No settlements needed - everyone is even!", 14, doc.lastAutoTable.finalY + 10);
+        const text = "No settlements needed - everyone is even!";
+        const textWidth = doc.getStringUnitWidth(text) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const x = (pageWidth - textWidth) / 2;
+        doc.text(text, x, doc.lastAutoTable.finalY + 10);
       }
 
       doc.save('expense_report.pdf');
