@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator } from 'lucide-react';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable'; // Corrected import
 
 const ExpenseSplitter = () => {
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
@@ -273,30 +273,30 @@ const ExpenseSplitter = () => {
   //   }
   // };
 
-  const showExportModal = (jsonString) => {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-      background: rgba(0,0,0,0.8); z-index: 1000; 
-      display: flex; align-items: center; justify-content: center; padding: 20px;
-    `;
+  // const showExportModal = (jsonString) => { // Removed function
+  //   const modal = document.createElement('div');
+  //   modal.style.cssText = `
+  //     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  //     background: rgba(0,0,0,0.8); z-index: 1000;
+  //     display: flex; align-items: center; justify-content: center; padding: 20px;
+  //   `;
     
-    const content = document.createElement('div');
-    content.style.cssText = `
-      background: white; border-radius: 10px; padding: 20px; 
-      max-width: 90%; max-height: 80%; overflow: auto;
-    `;
+  //   const content = document.createElement('div');
+  //   content.style.cssText = `
+  //     background: white; border-radius: 10px; padding: 20px;
+  //     max-width: 90%; max-height: 80%; overflow: auto;
+  //   `;
     
-    content.innerHTML = `
-      <h3 style="margin-top: 0;">Export Data</h3>
-      <p>Copy the text below and save it as a .json file:</p>
-      <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; padding: 10px;">${jsonString}</textarea>
-      <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px;">Close</button>
-    `;
+  //   content.innerHTML = `
+  //     <h3 style="margin-top: 0;">Export Data</h3>
+  //     <p>Copy the text below and save it as a .json file:</p>
+  //     <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; padding: 10px;">${jsonString}</textarea>
+  //     <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px;">Close</button>
+  //   `;
     
-    modal.appendChild(content);
-    document.body.appendChild(modal);
-  };
+  //   modal.appendChild(content);
+  //   document.body.appendChild(modal);
+  // };
 
   const importData = (event) => {
     const file = event.target.files[0];
