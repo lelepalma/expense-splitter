@@ -34,49 +34,60 @@ const ExpenseSplitter = () => {
           expense.date,
           expense.payee,
           expense.description,
-          `€${expense.amount.toFixed(2)}`, // EUR formatting
+          `€ ${expense.amount.toFixed(2)}`, // EUR formatting with space
         ];
         participants.forEach(p => {
           const splitAmount = expense.splits[p];
           if (splitAmount !== undefined) {
-            row.push(`€${splitAmount.toFixed(2)}`); // EUR formatting
+            row.push(`€ ${splitAmount.toFixed(2)}`); // EUR formatting with space
           } else {
-            row.push('€0.00'); // EUR formatting
+            row.push('€ 0.00'); // EUR formatting with space
           }
         });
         return row;
       });
 
+      // Expenses Table Title
+      doc.setFontSize(14);
+      doc.text("Expenses", 14, 15);
+
       doc.autoTable({
         head: [expenseHeaders],
         body: expenseRows,
-        startY: 20,
-        headStyles: { halign: 'center', fillColor: [22, 160, 133] }, // Center align headers and new color
-        styles: { fontSize: 8, halign: 'center' }, // Center align body cells
+        startY: 22, // Adjusted for title
+        headStyles: { halign: 'center', fillColor: [22, 160, 133] },
+        styles: { fontSize: 8, halign: 'center' },
       });
 
-      // Settlement Summary Table
+      // Settlement Summary Table Title
+      let settlementsY = doc.lastAutoTable.finalY + 15;
+      doc.setFontSize(14);
+      doc.text("Settlements Summary", 14, settlementsY);
+
       if (settlements.length > 0) {
         const settlementHeaders = ["From", "To", "Amount"];
         const settlementRows = settlements.map(settlement => [
           settlement.from,
           settlement.to,
-          `€${settlement.amount.toFixed(2)}` // EUR formatting
+          `€ ${settlement.amount.toFixed(2)}` // EUR formatting with space
         ]);
 
         doc.autoTable({
           head: [settlementHeaders],
           body: settlementRows,
-          startY: doc.lastAutoTable.finalY + 10,
-          headStyles: { halign: 'center', fillColor: [22, 160, 133] }, // Center align headers and new color
-          styles: { fontSize: 8, halign: 'center' }, // Center align body cells
+          startY: settlementsY + 7, // Adjusted for title
+          headStyles: { halign: 'center', fillColor: [22, 160, 133] },
+          styles: { fontSize: 8, halign: 'center' },
         });
       } else {
+        // Position "No settlements" text after the "Settlements Summary" title
         const text = "No settlements needed - everyone is even!";
+        // Font size for this text should ideally be the default or smaller than title
+        doc.setFontSize(10); // Resetting to a smaller size for this message
         const textWidth = doc.getStringUnitWidth(text) * doc.internal.getFontSize() / doc.internal.scaleFactor;
         const pageWidth = doc.internal.pageSize.getWidth();
         const x = (pageWidth - textWidth) / 2;
-        doc.text(text, x, doc.lastAutoTable.finalY + 10);
+        doc.text(text, x, settlementsY + 7); // Positioned after title space
       }
 
       doc.save('expense_report.pdf');
