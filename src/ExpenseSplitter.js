@@ -51,12 +51,39 @@ const ExpenseSplitter = () => {
       doc.setFontSize(14);
       doc.text("Expenses", 14, 15);
 
+      // Prepare Total Balance Row
+      const totalExpensesSum = expenses.reduce((sum, e) => sum + e.amount, 0);
+      const participantBalanceStrings = participants.map(p => {
+        const balance = balances[p] || 0; // Use balances state, default to 0 if undefined
+        return `€ ${balance.toFixed(2)}`;
+      });
+
+      const totalBalanceRow = [
+        '', // Date
+        '', // Payee
+        { content: 'Total Balance:', styles: { halign: 'right', fontStyle: 'bold'} }, // Description (align text to right for label)
+        { content: `€ ${totalExpensesSum.toFixed(2)}`, styles: { fontStyle: 'bold'} }, // Amount
+        ...participantBalanceStrings.map(balStr => ({ content: balStr, styles: { fontStyle: 'bold'} })) // Participant balances
+      ];
+
+      const finalExpenseRows = [...expenseRows, totalBalanceRow];
+
       doc.autoTable({
         head: [expenseHeaders],
-        body: expenseRows,
+        body: finalExpenseRows, // Use rows with total balance
         startY: 22, // Adjusted for title
         headStyles: { halign: 'center', fillColor: [22, 160, 133] },
         styles: { fontSize: 8, halign: 'center' },
+        didDrawCell: (data) => {
+          // Check if it's the last row of the body (Total Balance row)
+          if (data.table.body.length > 0 && data.row.index === data.table.body.length - 1) {
+            // The fontStyle is now set directly in the cell's `styles` object for the totalBalanceRow
+            // For a full row background color (optional, more complex):
+            // doc.setFillColor(240, 240, 240);
+            // doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+            // doc.setTextColor(0, 0, 0); // Reset text color if needed
+          }
+        }
       });
 
       // Settlement Summary Table Title
