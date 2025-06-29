@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Added useCallback
-import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogIn, LogOut, Save, FileUp } from 'lucide-react';
+import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogOut, Save, FileUp } from 'lucide-react'; // Removed LogIn
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // Corrected import
 // import { gapi } from 'gapi-script'; // Removed gapi-script import
@@ -11,7 +11,7 @@ const GOOGLE_OAUTH_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
 // However, if both are intended, list them:
 // const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 // const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]; // Commented out DISCOVERY_DOCS
-const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope
+// const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope, now commented out
 
 const ExpenseSplitter = () => {
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
@@ -204,15 +204,15 @@ const handleLoadFromDrive = async () => {
       mimeType: 'application/json',
     };
 
-    let multipartRequestBody;
-    let path;
-    let method;
+    // let multipartRequestBody; // Unused as the actual Drive upload logic is stubbed
+    // let path; // Unused as the actual Drive upload logic is stubbed
+    // let method; // Unused as the actual Drive upload logic is stubbed
 
     if (fileId) {
       // Update existing file
-      path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
-      method = 'PATCH';
-      multipartRequestBody =
+      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`; // Also unused now
+      // method = 'PATCH'; // Also unused now
+      // multipartRequestBody = // Also unused now
         delimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
         JSON.stringify({ name: fileName }) + // Only metadata that needs updating, if any. Or {} if only content.
