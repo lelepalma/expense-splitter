@@ -97,48 +97,44 @@ const handleLoadFromDrive = async () => {
   setExportStatus('Loading from Drive...');
 
   try {
+    // TODO: Implement actual Drive loading logic here.
+    // For now, keeping the placeholder message.
     console.log("handleLoadFromDrive: TRY block. Drive call and response processing logic is pending GIS refactor.");
     setExportStatus("ℹ️ Load from Drive: Functionality pending GIS update.");
-    // Actual drive call and data processing will be added here in Phase 2
+
+    // The following lines are problematic because 'response' is not defined.
+    // They were part of the orphaned block. For now, to fix the syntax,
+    // they are commented out. A proper implementation is needed.
+    // const fileContent = response.body;
+    // const data = JSON.parse(fileContent);
+    // if (data && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
+    //   setParticipants(data.participants);
+    //   setExpenses(data.expenses);
+    //   setExportStatus('✅ Data loaded from Drive');
+    //   console.log('Data loaded from Drive:', data);
+    // } else {
+    //   throw new Error("Invalid file format or missing data.");
+    // }
   } catch (error) {
-    console.error('Error in handleLoadFromDrive:', error);
-    setExportStatus(`❌ Load from Drive encountered an error: ${error.message || 'Unknown error'}`);
-  } finally {
-    setIsLoadingFromDrive(false);
-    // Use a general 5s for any message from this stubbed function for now
-    setTimeout(() => setExportStatus(''), 5000);
-  }
-};
-  
-
-      const fileContent = response.body;
-      const data = JSON.parse(fileContent);
-
-      // Basic validation
-      if (data && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
-        setParticipants(data.participants);
-        setExpenses(data.expenses);
-        // Balances and settlements will be recalculated by useMemo
-        setExportStatus('✅ Data loaded from Drive');
-        console.log('Data loaded from Drive:', data);
-      } else {
-        throw new Error("Invalid file format or missing data.");
-      }
-    } catch (error) {
       console.error('Error loading from Drive:', error);
       if (error.result && error.result.error && error.result.error.code === 404) {
         setExportStatus('❌ File not found on Drive.');
         localStorage.removeItem('tripJsonFileId'); // Clear stale file ID
       } else if (error instanceof SyntaxError) {
         setExportStatus('❌ Failed to parse file from Drive (invalid JSON).');
-      } else {
+      } else if (error instanceof ReferenceError && error.message.includes("response is not defined")) {
+        // This error is expected if the commented-out block above is uncommented without defining 'response'
+        setExportStatus('ℹ️ Load from Drive: Not fully implemented.');
+        console.warn("handleLoadFromDrive: 'response' is not defined. Actual Drive API call needed.");
+      }
+      else {
         setExportStatus(`❌ Load from Drive failed: ${error.message || 'Unknown error'}`);
       }
-    } finally {
+  } finally {
       setIsLoadingFromDrive(false);
       setTimeout(() => setExportStatus(''), 5000); // Longer timeout for messages
-    }
-  };
+  }
+};
 
   // initClient, updateSigninStatus, useEffect for GAPI init are removed.
   // GIS initialization will be handled differently.
