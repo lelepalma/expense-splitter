@@ -36,13 +36,13 @@ const GOOGLE_API_KEY = "AIzaSyCaXBZOn7V5Ufn86flW0wLNRupzhWqfjw4";
 // const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]; // Commented out DISCOVERY_DOCS
 // const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Moved up
 // TODO: IMPORTANT - Replace with your actual Google Cloud API Key
-const GOOGLE_API_KEY = "AIzaSyCaXBZOn7V5Ufn86flW0wLNRupzhWqfjw4";
+// const GOOGLE_API_KEY = "AIzaSyCaXBZOn7V5Ufn86flW0wLNRupzhWqfjw4"; // This was the duplicate
 // const API_KEY = "AIzaSyCaXBZOn7V5Ufn86flW0wLNRupzhWqfjw4"; // Removed API_KEY
 // Note: DISCOVERY_DOCS for sheets is not strictly needed if only using Drive.
 // However, if both are intended, list them:
 // const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 // const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]; // Commented out DISCOVERY_DOCS
-const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope, now uncommented
+// const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // This was also a duplicate, already handled by the one above the component.
 
 const ExpenseSplitter = () => {
   const [gisAccessToken, setGisAccessToken] = useState(null); // Added state for GIS Access Token
