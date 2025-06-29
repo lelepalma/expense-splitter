@@ -204,15 +204,16 @@ const handleLoadFromDrive = async () => {
       mimeType: 'application/json',
     };
 
-    // let multipartRequestBody; // Unused as the actual Drive upload logic is stubbed
-    // let path; // Unused as the actual Drive upload logic is stubbed
-    // let method; // Unused as the actual Drive upload logic is stubbed
+    let multipartRequestBody; // UNCOMMENTED
+    let path;                 // UNCOMMENTED
+    let method;               // UNCOMMENTED
 
     if (fileId) {
       // Update existing file
-      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`; // Also unused now
-      // method = 'PATCH'; // Also unused now
-      // multipartRequestBody = // Also unused now
+      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`; // Stays commented
+      // method = 'PATCH'; // Stays commented
+      /* multipartRequestBody assignment is already block commented, this is correct */
+      /*
         delimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
         JSON.stringify({ name: fileName }) + // Only metadata that needs updating, if any. Or {} if only content.
@@ -220,8 +221,9 @@ const handleLoadFromDrive = async () => {
         'Content-Type: application/json\r\n\r\n' +
         dataToSave +
         close_delim;
+      */
     } else {
-      // Create new file
+      // These assignments will use the now-declared variables
       path = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
       method = 'POST';
       multipartRequestBody =
@@ -237,8 +239,8 @@ const handleLoadFromDrive = async () => {
     try {
       // This part needs to be refactored to use fetch with Authorization header (Bearer token)
       // const response = await window.gapi.client.request({
-      //   path: path,
-      //   method: method,
+      //   path: path, // This 'path' will be from the else block or undefined if fileId exists
+      //   method: method, // This 'method' will be from the else block or undefined
       // });
       throw new Error("handleSaveToDrive needs refactoring for GIS");
 
