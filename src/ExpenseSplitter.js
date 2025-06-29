@@ -248,21 +248,8 @@ const handleLoadFromDrive = async () => {
       // console.log('File saved/updated with ID:', newFileId);
     } catch (error) {
       console.error('Error saving to Drive:', error);
-      setExportStatus(`❌ Save to Drive failed: ${error.result?.error?.message || error.message || 'Unknown error'}`);
-        headers: {
-          'Content-Type': 'multipart/related; boundary="' + boundary + '"',
-        },
-        body: multipartRequestBody,
-      });
-
-      const newFileId = JSON.parse(response.body).id;
-      localStorage.setItem('tripJsonFileId', newFileId);
-      setExportStatus('✅ Saved to Drive');
-      console.log('File saved/updated with ID:', newFileId);
-    } catch (error) {
-      console.error('Error saving to Drive:', error);
-      setExportStatus(`❌ Save to Drive failed: ${error.result?.error?.message || error.message || 'Unknown error'}`);
-      // If file not found on update, clear local storage ID
+      setExportStatus(`❌ Save to Drive failed: ${error.message || (error.result?.error?.message) || 'Unknown error'}`);
+      // If file not found on update, clear local storage ID (moved from the removed duplicate catch)
       if (error.result && error.result.error && error.result.error.code === 404 && fileId) {
         localStorage.removeItem('tripJsonFileId');
         setExportStatus('❌ Save failed (File not found on Drive, try saving again to create a new file)');
