@@ -1,9 +1,20 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Added useCallback
+import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogOut, Save, FileUp } from 'lucide-react'; // Removed LogIn
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // Corrected import
+// import { gapi } from 'gapi-script'; // Removed gapi-script import
+
+// Placeholder for Google OAuth Client ID
+const GOOGLE_OAUTH_CLIENT_ID = "215117254956-jk2m2upc45k6s65q56vh03g9utr7lr33.apps.googleusercontent.com";
+// const API_KEY = "YOUR_API_KEY_HERE"; // Removed API_KEY
+// Note: DISCOVERY_DOCS for sheets is not strictly needed if only using Drive.
+// However, if both are intended, list them:
+// const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+// const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]; // Commented out DISCOVERY_DOCS
+const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope, now uncommented
 
 const ExpenseSplitter = () => {
+  const [gisAccessToken, setGisAccessToken] = useState(null); // Added state for GIS Access Token
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
   const [expenses, setExpenses] = useState([
     { id: 1, date: '2025-06-25', payee: 'Alice', description: 'Dinner', amount: 120, splits: { Alice: 40, Bob: 40, Charlie: 40 } },
@@ -21,6 +32,255 @@ const ExpenseSplitter = () => {
     splitType: 'equal'
   });
   const [exportStatus, setExportStatus] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+  // const [authInstance, setAuthInstance] = useState(null); // Removed authInstance
+  const [isSavingToDrive, setIsSavingToDrive] = useState(false);
+  const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false);
+
+  // --- Google API Functions --- (Old GAPI functions will be removed or refactored)
+
+  const handleSignInWithGoogleCallback = (response) => {
+    console.log('ID Token response:', response);
+    // For now, just log clientId and credential. Proper decoding of response.credential (JWT) is needed for full user info.
+    console.log('Client ID:', response.clientId);
+    console.log('Credential (JWT):', response.credential);
+
+    setIsAuthenticated(true);
+    // Placeholder user info until JWT is decoded or another method is used
+    setUserInfo({ name: 'User (GIS)', email: 'user@example.com (GIS)' }); // Basic user info from ID token
+    setExportStatus('✅ ID Token received. Requesting Access Token...');
+
+    // After getting the ID token, request an access token
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_OAUTH_CLIENT_ID,
+      scope: SCOPES,
+      callback: (tokenResponse) => {
+        if (tokenResponse && tokenResponse.access_token) {
+          setGisAccessToken(tokenResponse.access_token);
+          setExportStatus('✅ Access Token obtained!');
+          console.log('Access Token:', tokenResponse.access_token);
+          // TODO: Optionally, decode ID token (response.credential) here for more user info if needed
+          // For example: const decodedIdToken = jwt_decode(response.credential); setUserInfo({name: decodedIdToken.name, email: decodedIdToken.email, imageUrl: decodedIdToken.picture});
+        } else {
+          setExportStatus('❌ Failed to obtain Access Token.');
+          console.error('Failed to obtain access token', tokenResponse);
+        }
+        setTimeout(() => setExportStatus(''), 5000); // Longer display for token status
+      },
+      error_callback: (error) => {
+        console.error('Access Token Error:', error);
+        setExportStatus(`❌ Access Token Error: ${error.type || error.message || 'Unknown error'}`);
+        setTimeout(() => setExportStatus(''), 5000);
+      }
+    });
+    tokenClient.requestAccessToken();
+  };
+
+  useEffect(() => {
+    const initializeGis = () => {
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        console.log('GIS client found, initializing...');
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          callback: handleSignInWithGoogleCallback,
+        });
+        console.log('GIS initialized.');
+        // Ensure the signInDiv is present in the DOM when this runs
+        const signInButtonContainer = document.getElementById('signInDiv');
+        if (signInButtonContainer) {
+            window.google.accounts.id.renderButton(
+                signInButtonContainer,
+                { theme: 'outline', size: 'large', type: 'standard', text: 'signin_with' }
+            );
+            console.log('GIS Sign-In button rendered.');
+        } else {
+            console.error('signInDiv not found for GIS button rendering.');
+        }
+      } else {
+        console.warn('GIS client not ready yet, retrying in 500ms...');
+        setTimeout(initializeGis, 500);
+      }
+    };
+    initializeGis();
+  }, []); // Empty dependency array to run once on mount. handleSignInWithGoogleCallback should be memoized if defined in component scope and used here.
+
+const handleLoadFromDrive = async () => {
+  if (!isAuthenticated) { // Simplified initial check
+    setExportStatus("❌ Please sign in first.");
+    setTimeout(() => setExportStatus(''), 3000);
+    return;
+  }
+  const fileId = localStorage.getItem('tripJsonFileId');
+  if (!fileId) {
+    setExportStatus("ℹ️ No file previously saved to Drive to load.");
+    setTimeout(() => setExportStatus(''), 3000);
+    return;
+  }
+
+  setIsLoadingFromDrive(true);
+  setExportStatus('Loading from Drive...');
+
+  try {
+    // TODO: Implement actual Drive loading logic here.
+    // For now, keeping the placeholder message.
+    console.log("handleLoadFromDrive: TRY block. Drive call and response processing logic is pending GIS refactor.");
+    setExportStatus("ℹ️ Load from Drive: Functionality pending GIS update.");
+
+    // The following lines are problematic because 'response' is not defined.
+    // They were part of the orphaned block. For now, to fix the syntax,
+    // they are commented out. A proper implementation is needed.
+    // const fileContent = response.body;
+    // const data = JSON.parse(fileContent);
+    // if (data && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
+    //   setParticipants(data.participants);
+    //   setExpenses(data.expenses);
+    //   setExportStatus('✅ Data loaded from Drive');
+    //   console.log('Data loaded from Drive:', data);
+    // } else {
+    //   throw new Error("Invalid file format or missing data.");
+    // }
+  } catch (error) {
+      console.error('Error loading from Drive:', error);
+      if (error.result && error.result.error && error.result.error.code === 404) {
+        setExportStatus('❌ File not found on Drive.');
+        localStorage.removeItem('tripJsonFileId'); // Clear stale file ID
+      } else if (error instanceof SyntaxError) {
+        setExportStatus('❌ Failed to parse file from Drive (invalid JSON).');
+      } else if (error instanceof ReferenceError && error.message.includes("response is not defined")) {
+        // This error is expected if the commented-out block above is uncommented without defining 'response'
+        setExportStatus('ℹ️ Load from Drive: Not fully implemented.');
+        console.warn("handleLoadFromDrive: 'response' is not defined. Actual Drive API call needed.");
+      }
+      else {
+        setExportStatus(`❌ Load from Drive failed: ${error.message || 'Unknown error'}`);
+      }
+  } finally {
+      setIsLoadingFromDrive(false);
+      setTimeout(() => setExportStatus(''), 5000); // Longer timeout for messages
+  }
+};
+
+  // initClient, updateSigninStatus, useEffect for GAPI init are removed.
+  // GIS initialization will be handled differently.
+
+  // const handleSignIn = useCallback(() => { // Commenting out old GAPI based signIn
+  //   // This function will be entirely replaced by GIS logic
+  //   console.error("handleSignIn needs to be refactored for GIS.");
+  //   setExportStatus("❌ Sign-in logic not updated for GIS yet.");
+  //   setTimeout(() => setExportStatus(''), 3000);
+  // }, [/* authInstance, */ setExportStatus]);
+
+  const handleSignOut = useCallback(() => {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      window.google.accounts.id.disableAutoSelect();
+    }
+    // Revoke access token if it exists
+    if (gisAccessToken && window.google && window.google.accounts && window.google.accounts.oauth2) {
+      window.google.accounts.oauth2.revoke(gisAccessToken, () => {
+        console.log('GIS Access token revoked.');
+        setExportStatus('ⓘ Access token revoked.');
+        setTimeout(() => setExportStatus(''), 3000);
+      });
+    }
+    setGisAccessToken(null); // Clear access token from state
+
+    setIsAuthenticated(false);
+    setUserInfo(null);
+    console.log('User signed out via GIS.');
+    setExportStatus('ⓘ Signed out.'); // This might overwrite the "token revoked" message quickly
+    setTimeout(() => setExportStatus(''), 3000);
+  }, [gisAccessToken, setIsAuthenticated, setUserInfo, setExportStatus, setGisAccessToken]); // Added gisAccessToken and setGisAccessToken to dependencies
+
+  const handleDownloadJson = async () => {
+    setExportStatus('Preparing JSON download...');
+    try {
+      const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+      const blob = new Blob([dataToSave], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = 'trip_expenses.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      setExportStatus('✅ JSON downloaded.');
+    } catch (error) {
+      console.error('Error downloading JSON:', error);
+      setExportStatus('❌ JSON download failed.');
+    } finally {
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  };
+
+  const handleSaveToDrive = async () => {
+    if (!isAuthenticated) {
+      setExportStatus("❌ Auth or Drive API not ready.");
+      setTimeout(() => setExportStatus(''), 3000);
+      return;
+    }
+
+    setIsSavingToDrive(true);
+    setExportStatus('Saving to Drive...');
+
+    // const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const fileId = localStorage.getItem('tripJsonFileId'); // Keep fileId for the 404 check in catch
+    // const fileName = 'trip_expenses.json';
+
+    // const boundary = '-------314159265358979323846';
+    // const delimiter = "\r\n--" + boundary + "\r\n";
+    // const close_delim = "\r\n--" + boundary + "--";
+
+    // const metadata = {
+    //   name: fileName,
+    //   mimeType: 'application/json',
+    // };
+
+    // let multipartRequestBody;
+    // let path;
+    // let method;
+
+    if (fileId) {
+      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+      // method = 'PATCH';
+      /* multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify({ name: fileName }) +
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        dataToSave +
+        close_delim;
+      */
+    } else {
+      // path = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+      // method = 'POST';
+      /* multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(metadata) +
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        dataToSave +
+        close_delim;
+      */
+    }
+
+    try {
+      throw new Error("handleSaveToDrive needs refactoring for GIS");
+    } catch (error) {
+      console.error('Error saving to Drive:', error);
+      setExportStatus(`❌ Save to Drive failed: ${error.message || (error.result?.error?.message) || 'Unknown error'}`);
+      if (error.result && error.result.error && error.result.error.code === 404 && fileId) {
+        localStorage.removeItem('tripJsonFileId');
+        setExportStatus('❌ Save failed (File not found on Drive, try saving again to create a new file)');
+      }
+    } finally {
+      setIsSavingToDrive(false);
+      setTimeout(() => setExportStatus(''), 5000);
+    }
+  };
 
   const exportToPdf = async () => {
     setExportStatus('Exporting...');
@@ -352,13 +612,20 @@ const ExpenseSplitter = () => {
           if (data.participants && data.expenses && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
             setParticipants(data.participants);
             setExpenses(data.expenses);
-            alert('Data imported successfully!');
+            setExportStatus('✅ Data imported successfully!');
+            setTimeout(() => setExportStatus(''), 3000);
           } else {
-            throw new Error('Invalid file structure');
+            throw new Error('Invalid file structure.'); // Will be caught by catch block
           }
         } catch (error) {
           console.error('Import failed:', error);
-          alert('Invalid file format. Please select a valid expense splitter JSON file.');
+          // Check if it's the specific "Invalid file structure" error we threw
+          if (error.message === 'Invalid file structure.') {
+            setExportStatus('❌ Import failed: Invalid file structure.');
+          } else { // Generic error (e.g., JSON.parse failed)
+            setExportStatus(`❌ Import failed: ${error.message || 'Invalid file format.'}`);
+          }
+          setTimeout(() => setExportStatus(''), 5000);
         }
       };
       reader.readAsText(file);
@@ -377,27 +644,80 @@ const ExpenseSplitter = () => {
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Trip Expense Splitter</h1>
               <p className="text-gray-600">Track and split expenses fairly among participants</p>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center"> {/* Added items-center for alignment */}
+              {isAuthenticated && userInfo ? (
+                <div className="flex items-center gap-2">
+                  {userInfo.imageUrl && (
+                    <img src={userInfo.imageUrl} alt={userInfo.name} className="w-8 h-8 rounded-full" />
+                  )}
+                  <span className="text-sm text-gray-700">Hi, {userInfo.name || userInfo.email}</span>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center gap-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm"
+                  >
+                    <LogOut size={16} />
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                // This div will host the Google Sign-In button
+                <div id="signInDiv" className="flex justify-center"></div>
+              )}
+
+              {/* Group 2: Manual File Operations */}
               <button
                 onClick={() => document.getElementById('import-file').click()}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
               >
                 <Upload size={18} />
-                Import
+                Upload JSON
               </button>
               <button
+                onClick={handleDownloadJson}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
+              >
+                <Download size={18} />
+                Download JSON
+              </button>
+
+              {/* Group 3: Google Drive Operations (Conditional on Authentication) */}
+              {isAuthenticated && (
+                <>
+                  <button
+                    onClick={handleSaveToDrive}
+                    disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors"
+                  >
+                    <Save size={18} />
+                    {isSavingToDrive ? 'Saving...' : 'Save to Drive'}
+                  </button>
+                  <button
+                    onClick={handleLoadFromDrive}
+                    disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
+                  >
+                    <FileUp size={18} />
+                    {isLoadingFromDrive ? 'Loading...' : 'Load from Drive'}
+                  </button>
+                </>
+              )}
+
+              {/* Group 4: Other Export Operations */}
+              <button
                 onClick={exportToPdf}
-                disabled={exportStatus === 'Exporting...'}
+                disabled={exportStatus.includes('Exporting...')}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg transition-colors"
               >
                 <Download size={18} />
                 Export PDF
               </button>
+
+              {/* Status Display */}
               {exportStatus && (
-                <div className={`flex items-center px-3 py-2 rounded-lg text-sm ${
+                <div className={`flex items-center px-3 py-1.5 rounded-lg text-xs ${ /* Adjusted padding and text size */
                   exportStatus.startsWith('✅') ? 'bg-green-100 text-green-800' :
                   exportStatus.startsWith('❌') ? 'bg-red-100 text-red-800' :
-                  'bg-blue-100 text-blue-800' // For 'Exporting...'
+                  'bg-blue-100 text-blue-800'
                 }`}>
                   {exportStatus}
                 </div>
