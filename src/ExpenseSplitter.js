@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Added useCallback
-import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogOut, Save, FileUp } from 'lucide-react'; // Removed LogIn
+import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogOut, Save, FileUp, Menu as MenuIcon } from 'lucide-react'; // Removed LogIn, Added MenuIcon
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // Corrected import
 // import { gapi } from 'gapi-script'; // Removed gapi-script import
@@ -44,6 +44,7 @@ const ExpenseSplitter = () => {
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
   const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false);
   const [isPickerApiLoaded, setIsPickerApiLoaded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false); // State for the new menu
 
   // --- Google API Functions --- (Old GAPI functions will be removed or refactored)
 
@@ -901,6 +902,69 @@ const handleLoadFromDrive = async () => {
     event.target.value = '';
   };
 
+  const renderMenu = () => (
+    <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+      <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+        <button
+          onClick={() => { document.getElementById('import-file').click(); setShowMenu(false); }}
+          className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+          role="menuitem"
+        >
+          <Upload size={18} />
+          Upload JSON
+        </button>
+        <button
+          onClick={() => { handleDownloadJson(); setShowMenu(false); }}
+          className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+          role="menuitem"
+        >
+          <Download size={18} />
+          Download JSON
+        </button>
+        {isAuthenticated && (
+          <>
+            <button
+              onClick={() => { handleSaveToDrive(); setShowMenu(false); }}
+              disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken}
+              className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+              role="menuitem"
+            >
+              <Save size={18} />
+              {isSavingToDrive ? 'Saving...' : 'Quick Save'}
+            </button>
+            <button
+              onClick={() => { handleLoadFromDrive(); setShowMenu(false); }}
+              disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken}
+              className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+              role="menuitem"
+            >
+              <FileUp size={18} />
+              {isLoadingFromDrive ? 'Loading...' : 'Load Last Saved'}
+            </button>
+            <button
+              onClick={() => { handleSaveAsToDrive(); setShowMenu(false); }}
+              disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken || !isPickerApiLoaded}
+              className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+              role="menuitem"
+            >
+              <Save size={18} />
+              {isSavingToDrive ? 'Saving As...' : 'Save As to Drive'}
+            </button>
+            <button
+              onClick={() => { handlePickFromDrive(); setShowMenu(false); }}
+              disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken || !isPickerApiLoaded}
+              className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50"
+              role="menuitem"
+            >
+              <Upload size={18} />
+              {isLoadingFromDrive ? 'Opening...' : 'Open from Drive...'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-6xl mx-auto">
@@ -931,68 +995,6 @@ const handleLoadFromDrive = async () => {
                 <div id="signInDiv" className="flex justify-center"></div>
               )}
 
-              {/* Group 2: Manual File Operations */}
-              <button
-                onClick={() => document.getElementById('import-file').click()}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
-              >
-                <Upload size={18} />
-                Upload JSON
-              </button>
-              <button
-                onClick={handleDownloadJson}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
-              >
-                <Download size={18} />
-                Download JSON
-              </button>
-
-              {/* Group 3: Google Drive Operations (Conditional on Authentication) */}
-              {isAuthenticated && (
-                <>
-                  <button
-                    onClick={handleSaveToDrive}
-                    disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors"
-                  >
-                    <Save size={18} />
-                    {isSavingToDrive ? 'Saving...' : 'Quick Save'} {/* Renamed for clarity */}
-                  </button>
-
-                  {/* New Save As to Drive button */}
-                  <button
-                    onClick={handleSaveAsToDrive}
-                    disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken || !isPickerApiLoaded}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-colors"
-                    title="Save as a new file or to a new location on Drive"
-                  >
-                    <Save size={18} /> {/* Consider a different icon if available, e.g., SaveAs */}
-                    {isSavingToDrive ? 'Saving As...' : 'Save As to Drive'}
-                  </button>
-
-                  {/* Existing Load from Drive button */}
-                  <button
-                    onClick={handleLoadFromDrive}
-                    disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
-                  >
-                    <FileUp size={18} />
-                    {isLoadingFromDrive ? 'Loading...' : 'Load Last Saved'} {/* Renamed for clarity */}
-                  </button>
-
-                  {/* New Open from Drive button */}
-                  <button
-                    onClick={handlePickFromDrive}
-                    disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken || !isPickerApiLoaded}
-                    className="flex items-center gap-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white rounded-lg transition-colors"
-                    title="Open a JSON expense file from Google Drive"
-                  >
-                    <Upload size={18} /> {/* Or FileSearch, FolderOpen icons if available and more suitable */}
-                    {isLoadingFromDrive ? 'Opening...' : 'Open from Drive...'}
-                  </button>
-                </>
-              )}
-
               {/* Group 4: Other Export Operations */}
               <button
                 onClick={exportToPdf}
@@ -1002,6 +1004,18 @@ const handleLoadFromDrive = async () => {
                 <Download size={18} />
                 Export PDF
               </button>
+
+              {/* Menu Toggle Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
+                >
+                  <MenuIcon size={18} />
+                  Menu
+                </button>
+                {showMenu && renderMenu()}
+              </div>
 
               {/* Status Display */}
               {exportStatus && (
