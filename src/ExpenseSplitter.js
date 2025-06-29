@@ -4,8 +4,14 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // Corrected import
 // import { gapi } from 'gapi-script'; // Removed gapi-script import
 
+// IMPORTANT:
+// 1. Ensure the Google Picker API is enabled in your Google Cloud Console project.
+// 2. Replace GOOGLE_API_KEY below with your actual API key.
+
 // Placeholder for Google OAuth Client ID
 const GOOGLE_OAUTH_CLIENT_ID = "215117254956-jk2m2upc45k6s65q56vh03g9utr7lr33.apps.googleusercontent.com";
+// TODO: IMPORTANT - Replace with your actual Google Cloud API Key
+const GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY_HERE";
 // const API_KEY = "YOUR_API_KEY_HERE"; // Removed API_KEY
 // Note: DISCOVERY_DOCS for sheets is not strictly needed if only using Drive.
 // However, if both are intended, list them:
@@ -37,6 +43,7 @@ const ExpenseSplitter = () => {
   // const [authInstance, setAuthInstance] = useState(null); // Removed authInstance
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
   const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false);
+  const [isPickerApiLoaded, setIsPickerApiLoaded] = useState(false);
 
   // --- Google API Functions --- (Old GAPI functions will be removed or refactored)
 
@@ -104,6 +111,26 @@ const ExpenseSplitter = () => {
     };
     initializeGis();
   }, []); // Empty dependency array to run once on mount. handleSignInWithGoogleCallback should be memoized if defined in component scope and used here.
+
+  useEffect(() => {
+    const loadPickerApi = () => {
+      if (window.gapi && window.gapi.load) {
+        window.gapi.load('picker', { 'callback': () => {
+          console.log('Google Picker API loaded.');
+          // The Picker API does not require gapi.client.init for its basic operation with an API key.
+          // It primarily uses the API key during PickerBuilder().setDeveloperKey(developerKey)
+          // and OAuth token for file access.
+          setIsPickerApiLoaded(true);
+        }});
+      } else {
+        // Retry if gapi is not immediately available
+        console.warn('gapi client not ready yet for Picker, retrying in 500ms...');
+        setTimeout(loadPickerApi, 500);
+      }
+    };
+
+    loadPickerApi();
+  }, []); // Empty dependency array to run once on mount
 
 const handleLoadFromDrive = async () => {
   if (!gisAccessToken) {
@@ -313,6 +340,210 @@ const handleLoadFromDrive = async () => {
       setIsSavingToDrive(false);
       setTimeout(() => setExportStatus(''), 5000);
     }
+  };
+
+  const uploadFileToDrive = async (fileName, folderId) => {
+    if (!gisAccessToken) {
+      setExportStatus("❌ Access Token not available for upload.");
+      setTimeout(() => setExportStatus(''), 3000);
+      return;
+    }
+
+    setIsSavingToDrive(true); // Use existing state for loading indicator
+    setExportStatus(`Saving "${fileName}" to Drive...`);
+
+    const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const boundary = '-------314159265358979323846';
+    const delimiter = "\r\n--" + boundary + "\r\n";
+    const close_delim = "\r\n--" + boundary + "--";
+
+    const driveMetadata = {
+      name: fileName,
+      mimeType: 'application/json',
+      parents: [folderId] // Specify the parent folder
+    };
+
+    const multipartRequestBody =
+      delimiter +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(driveMetadata) +
+      delimiter +
+      'Content-Type: application/json\r\n\r\n' +
+      dataToSave +
+      close_delim;
+
+    try {
+      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST', // Always POST for creating new files
+        headers: {
+          'Authorization': `Bearer ${gisAccessToken}`,
+          'Content-Type': `multipart/related; boundary="${boundary}"`
+        },
+        body: multipartRequestBody,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Drive API Error Response (Save As):', errorData);
+        throw new Error(`Drive API Error: ${response.status} ${response.statusText}. ${errorData?.error?.message || ''}`);
+      }
+
+      const responseData = await response.json();
+      const newFileId = responseData.id;
+      localStorage.setItem('tripJsonFileId', newFileId);
+      setExportStatus(`✅ "${fileName}" saved to Drive (ID: ${newFileId}). Ready for Quick Save.`);
+      console.log('File saved with ID:', newFileId);
+
+    } catch (error) {
+      console.error('Error saving to Drive (Save As):', error);
+      setExportStatus(`❌ Save As to Drive failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsSavingToDrive(false);
+      setTimeout(() => setExportStatus(''), 5000);
+    }
+  };
+
+  const handleSaveAsToDrive = () => {
+    if (!isAuthenticated || !gisAccessToken || !isPickerApiLoaded || !window.google || !window.google.picker) {
+      let message = "❌ Cannot save: Authentication or token not ready.";
+      if (!isPickerApiLoaded) {
+        message = "❌ Cannot save: Picker API not loaded. Check API key and Picker API enablement in Google Cloud Console.";
+      } else if (!window.google?.picker) {
+        message = "❌ Cannot save: Picker functionality not available.";
+      }
+      setExportStatus(message);
+      console.error('Save As Pre-requisites not met:', { isAuthenticated, gisAccessToken, isPickerApiLoaded, pickerExists: !!window.google?.picker });
+      setTimeout(() => setExportStatus(''), 5000); // Increased timeout for this important message
+      return;
+    }
+
+    const fileName = prompt("Enter file name for Google Drive:", "trip_expenses_new.json");
+    if (!fileName) {
+      setExportStatus("ℹ️ Save As cancelled by user.");
+      setTimeout(() => setExportStatus(''), 3000);
+      return;
+    }
+
+    const createPicker = () => {
+      console.log('[Save As] createPicker function called.');
+      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS);
+
+      const picker = new window.google.picker.PickerBuilder()
+        .addView(view)
+        .setTitle("Select a folder to save in")
+        .setOAuthToken(gisAccessToken)
+        .setDeveloperKey(GOOGLE_API_KEY) // GOOGLE_API_KEY is from previous steps
+        .setCallback((data) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const folder = data.docs[0];
+            if (folder && folder.id) {
+              const folderId = folder.id;
+              setExportStatus(`Folder selected: ${folder.name}. Preparing to save...`);
+              // Proceed to upload the file to this folderId with the prompted fileName
+              uploadFileToDrive(fileName, folderId);
+            } else {
+              setExportStatus("❌ No folder selected or folder ID missing.");
+              setTimeout(() => setExportStatus(''), 3000);
+            }
+          } else if (data.action === window.google.picker.Action.CANCEL) {
+            setExportStatus("ℹ️ Save As (folder selection) cancelled.");
+            setTimeout(() => setExportStatus(''), 3000);
+          }
+        })
+        .build();
+      console.log('[Save As] About to call picker.setVisible(true). Picker object:', picker);
+      picker.setVisible(true);
+    };
+    createPicker();
+  };
+
+  const handlePickFromDrive = () => {
+    if (!isAuthenticated || !gisAccessToken || !isPickerApiLoaded || !window.google || !window.google.picker) {
+      let message = "❌ Cannot open: Authentication or token not ready.";
+      if (!isPickerApiLoaded) {
+        message = "❌ Cannot open: Picker API not loaded. Check API key and Picker API enablement in Google Cloud Console.";
+      } else if (!window.google?.picker) {
+        message = "❌ Cannot open: Picker functionality not available.";
+      }
+      setExportStatus(message);
+      console.error('Pick from Drive Pre-requisites not met:', { isAuthenticated, gisAccessToken, isPickerApiLoaded, pickerExists: !!window.google?.picker });
+      setTimeout(() => setExportStatus(''), 5000); // Increased timeout
+      return;
+    }
+
+    const createPicker = () => {
+      const docsView = new window.google.picker.DocsView()
+        .setIncludeFolders(false) // We want files, not folders
+        .setMimeTypes('application/json')
+        .setOwnedByMe(true); // Optional: Start with user's own files
+
+      const picker = new window.google.picker.PickerBuilder()
+        .addView(docsView)
+        .setTitle("Select a JSON expense file")
+        .setOAuthToken(gisAccessToken)
+        .setDeveloperKey(GOOGLE_API_KEY) // GOOGLE_API_KEY from previous steps
+        .setCallback(async (data) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const file = data.docs[0];
+            if (file && file.id) {
+              setExportStatus(`File selected: ${file.name}. Loading...`);
+              setIsLoadingFromDrive(true); // Use existing state for loading indicator
+
+              try {
+                const response = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${gisAccessToken}`,
+                  },
+                });
+
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  console.error('Drive API Error Response (Pick):', errorData);
+                  throw new Error(`Drive API Error: ${response.status} ${response.statusText}. ${errorData?.error?.message || ''}`);
+                }
+
+                const fileContent = await response.json();
+
+                if (fileContent && Array.isArray(fileContent.participants) && Array.isArray(fileContent.expenses)) {
+                  setParticipants(fileContent.participants);
+                  setExpenses(fileContent.expenses);
+                  localStorage.setItem('tripJsonFileId', file.id);
+                  setExportStatus(`✅ Data loaded from "${file.name}" (ID: ${file.id}). Ready for Quick Save.`);
+                  console.log('Data loaded from Drive via Picker:', fileContent);
+                } else {
+                  throw new Error("Invalid file format or missing data from Drive file.");
+                }
+
+              } catch (error) {
+                console.error('Error loading from Drive (Picker):', error);
+                let errorMessage = error.message || 'Unknown error';
+                if (error instanceof SyntaxError) {
+                    errorMessage = '❌ Failed to parse file from Drive (invalid JSON).';
+                } else if (error.message?.includes("Drive API Error")) {
+                    errorMessage = `❌ Load from Drive failed: ${error.message}`;
+                } else {
+                    errorMessage = `❌ Load from Drive failed: ${errorMessage}`;
+                }
+                setExportStatus(errorMessage);
+              } finally {
+                setIsLoadingFromDrive(false);
+                setTimeout(() => setExportStatus(''), 5000);
+              }
+
+            } else {
+              setExportStatus("❌ No file selected or file ID missing.");
+              setTimeout(() => setExportStatus(''), 3000);
+            }
+          } else if (data.action === window.google.picker.Action.CANCEL) {
+            setExportStatus("ℹ️ Open from Drive (file selection) cancelled.");
+            setTimeout(() => setExportStatus(''), 3000);
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    };
+    createPicker();
   };
 
   const exportToPdf = async () => {
@@ -722,15 +953,39 @@ const handleLoadFromDrive = async () => {
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors"
                   >
                     <Save size={18} />
-                    {isSavingToDrive ? 'Saving...' : 'Save to Drive'}
+                    {isSavingToDrive ? 'Saving...' : 'Quick Save'} {/* Renamed for clarity */}
                   </button>
+
+                  {/* New Save As to Drive button */}
+                  <button
+                    onClick={handleSaveAsToDrive}
+                    disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken || !isPickerApiLoaded}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-colors"
+                    title="Save as a new file or to a new location on Drive"
+                  >
+                    <Save size={18} /> {/* Consider a different icon if available, e.g., SaveAs */}
+                    {isSavingToDrive ? 'Saving As...' : 'Save As to Drive'}
+                  </button>
+
+                  {/* Existing Load from Drive button */}
                   <button
                     onClick={handleLoadFromDrive}
                     disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
                   >
                     <FileUp size={18} />
-                    {isLoadingFromDrive ? 'Loading...' : 'Load from Drive'}
+                    {isLoadingFromDrive ? 'Loading...' : 'Load Last Saved'} {/* Renamed for clarity */}
+                  </button>
+
+                  {/* New Open from Drive button */}
+                  <button
+                    onClick={handlePickFromDrive}
+                    disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken || !isPickerApiLoaded}
+                    className="flex items-center gap-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white rounded-lg transition-colors"
+                    title="Open a JSON expense file from Google Drive"
+                  >
+                    <Upload size={18} /> {/* Or FileSearch, FolderOpen icons if available and more suitable */}
+                    {isLoadingFromDrive ? 'Opening...' : 'Open from Drive...'}
                   </button>
                 </>
               )}
