@@ -5,8 +5,8 @@ import 'jspdf-autotable'; // Corrected import
 // import { gapi } from 'gapi-script'; // Removed gapi-script import
 
 // Placeholder for Google OAuth Client ID
-const GOOGLE_OAUTH_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
-const API_KEY = "YOUR_API_KEY_HERE"; // Added placeholder for API Key
+const GOOGLE_OAUTH_CLIENT_ID = "215117254956-jk2m2upc45k6s65q56vh03g9utr7lr33.apps.googleusercontent.com";
+const API_KEY = "AIzaSyCaXBZOn7V5Ufn86flW0wLNRupzhWqfjw4"; // Added placeholder for API Key
 // Note: DISCOVERY_DOCS for sheets is not strictly needed if only using Drive.
 // However, if both are intended, list them:
 // const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
