@@ -1,7 +1,17 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Added useCallback
+import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogIn, LogOut, Save, FileUp } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // Corrected import
+// import { gapi } from 'gapi-script'; // Removed gapi-script import
+
+// Placeholder for Google OAuth Client ID
+const GOOGLE_OAUTH_CLIENT_ID = "215117254956-jk2m2upc45k6s65q56vh03g9utr7lr33.apps.googleusercontent.com";
+const API_KEY = "AIzaSyCaXBZOn7V5Ufn86flW0wLNRupzhWqfjw4"; // Added placeholder for API Key
+// Note: DISCOVERY_DOCS for sheets is not strictly needed if only using Drive.
+// However, if both are intended, list them:
+// const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
+const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]; // Simplified for Drive focus
+const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope
 
 const ExpenseSplitter = () => {
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
@@ -21,6 +31,269 @@ const ExpenseSplitter = () => {
     splitType: 'equal'
   });
   const [exportStatus, setExportStatus] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+  const [authInstance, setAuthInstance] = useState(null);
+  const [isSavingToDrive, setIsSavingToDrive] = useState(false);
+  const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false);
+
+  // --- Google API Functions ---
+  // Memoize updateSigninStatus
+  const updateSigninStatus = useCallback((isSignedIn) => {
+    setIsAuthenticated(isSignedIn);
+    if (isSignedIn) {
+      const currentUser = window.gapi.auth2.getAuthInstance().currentUser.get();
+      const profile = currentUser.getBasicProfile();
+      setUserInfo({
+        name: profile.getName(),
+        email: profile.getEmail(),
+        imageUrl: profile.getImageUrl(),
+      });
+      console.log('User signed in:', profile.getName());
+      setExportStatus('✅ Signed in successfully.');
+      setTimeout(() => setExportStatus(''), 3000);
+    } else {
+      setUserInfo(null);
+      setExportStatus('ⓘ Signed out.');
+      setTimeout(() => setExportStatus(''), 3000);
+      console.log('User signed out.');
+    }
+  }, [setExportStatus, setIsAuthenticated, setUserInfo]);
+
+  const handleLoadFromDrive = async () => {
+    if (!isAuthenticated || !window.gapi || !window.gapi.client || !window.gapi.client.drive) { // window.gapi
+      setExportStatus("❌ Auth or Drive API not ready.");
+      setTimeout(() => setExportStatus(''), 3000);
+      return;
+    }
+
+    const fileId = localStorage.getItem('tripJsonFileId');
+    if (!fileId) {
+      setExportStatus("ℹ️ No file found on Drive to load.");
+      setTimeout(() => setExportStatus(''), 3000);
+      return;
+    }
+
+    setIsLoadingFromDrive(true);
+    setExportStatus('Loading from Drive...');
+
+    try {
+      const response = await window.gapi.client.drive.files.get({ // window.gapi
+        fileId: fileId,
+        alt: 'media',
+      });
+
+      const fileContent = response.body;
+      const data = JSON.parse(fileContent);
+
+      // Basic validation
+      if (data && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
+        setParticipants(data.participants);
+        setExpenses(data.expenses);
+        // Balances and settlements will be recalculated by useMemo
+        setExportStatus('✅ Data loaded from Drive');
+        console.log('Data loaded from Drive:', data);
+      } else {
+        throw new Error("Invalid file format or missing data.");
+      }
+    } catch (error) {
+      console.error('Error loading from Drive:', error);
+      if (error.result && error.result.error && error.result.error.code === 404) {
+        setExportStatus('❌ File not found on Drive.');
+        localStorage.removeItem('tripJsonFileId'); // Clear stale file ID
+      } else if (error instanceof SyntaxError) {
+        setExportStatus('❌ Failed to parse file from Drive (invalid JSON).');
+      } else {
+        setExportStatus(`❌ Load from Drive failed: ${error.message || 'Unknown error'}`);
+      }
+    } finally {
+      setIsLoadingFromDrive(false);
+      setTimeout(() => setExportStatus(''), 5000); // Longer timeout for messages
+    }
+  };
+
+  // Memoize initClient
+  const initClient = useCallback(() => {
+    if (!window.gapi || !window.gapi.client || !window.gapi.auth2) {
+      console.error("GAPI client or auth2 not available for initClient");
+      setExportStatus("❌ Google API not loaded yet. Please wait or refresh.");
+      setTimeout(() => setExportStatus(''), 5000);
+      return;
+    }
+    window.gapi.client.init({
+      apiKey: API_KEY,
+      clientId: GOOGLE_OAUTH_CLIENT_ID,
+      discoveryDocs: DISCOVERY_DOCS,
+      scope: SCOPES,
+    }).then(() => {
+      const instance = window.gapi.auth2.getAuthInstance();
+      setAuthInstance(instance);
+      instance.isSignedIn.listen(updateSigninStatus);
+      updateSigninStatus(instance.isSignedIn.get());
+      window.gapi.client.load('drive', 'v3').then(() => {
+        console.log("Google Drive API loaded.");
+      }).catch(err => {
+        console.error("Error loading Google Drive API:", err);
+        setExportStatus(`❌ Error loading Drive API: ${err.message || 'Unknown error'}`);
+        setTimeout(() => setExportStatus(''), 5000);
+      });
+      setExportStatus('ⓘ Google Auth initialized.');
+      setTimeout(() => setExportStatus(''), 3000);
+    }).catch((error) => {
+      console.error("Error initializing Google API client:", error);
+      setExportStatus(`❌ Error initializing Google Auth: ${error.message || 'Unknown error'}`);
+      setTimeout(() => setExportStatus(''), 5000);
+    });
+  }, [updateSigninStatus, setAuthInstance, setExportStatus]); // API_KEY, GOOGLE_OAUTH_CLIENT_ID, etc are module constants
+
+  const handleSignIn = useCallback(() => {
+    if (authInstance) {
+      authInstance.signIn().then(user => {
+        // console.log("Sign-in successful for user", user.getBasicProfile().getName());
+        // updateSigninStatus will be called by the listener, so no explicit success message here to avoid double messages.
+      }).catch(error => {
+        console.error('Sign-in error:', error);
+        setExportStatus(`❌ Sign-in failed: ${error.error || error.details || error.message || 'Popup closed or error occurred'}`);
+        setTimeout(() => setExportStatus(''), 5000);
+      });
+    } else {
+      console.error("Google Auth instance not ready for sign in.");
+      setExportStatus("❌ Auth not ready. Try again.");
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  }, [authInstance, setExportStatus]);
+
+  const handleSignOut = useCallback(() => {
+    if (authInstance) {
+      authInstance.signOut().then(() => {
+        // updateSigninStatus will be called by the listener.
+        // console.log("User signed out via API call.");
+      }).catch(error => {
+        console.error('Sign-out error:', error);
+        setExportStatus(`❌ Sign-out failed: ${error.message || 'Unknown error'}`);
+        setTimeout(() => setExportStatus(''), 5000);
+      });
+    }  else {
+      console.error("Google Auth instance not ready for sign out.");
+      setExportStatus("❌ Auth not ready for sign out.");
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  }, [authInstance, setExportStatus]);
+
+  useEffect(() => {
+    const checkGapiReady = () => {
+      if (window.gapi && window.gapi.load && window.gapi.client) {
+        window.gapi.load('client:auth2', initClient);
+      } else {
+        console.warn("Google API not ready yet, retrying init in 500ms...");
+        setTimeout(checkGapiReady, 500);
+      }
+    };
+    checkGapiReady();
+  }, [initClient]); // Added memoized initClient to dependency array
+
+  const handleDownloadJson = async () => {
+    setExportStatus('Preparing JSON download...');
+    try {
+      const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+      const blob = new Blob([dataToSave], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = 'trip_expenses.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      setExportStatus('✅ JSON downloaded.');
+    } catch (error) {
+      console.error('Error downloading JSON:', error);
+      setExportStatus('❌ JSON download failed.');
+    } finally {
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  };
+
+  const handleSaveToDrive = async () => {
+    if (!isAuthenticated || !window.gapi || !window.gapi.client || !window.gapi.client.drive) { // window.gapi
+      setExportStatus("❌ Auth or Drive API not ready.");
+      setTimeout(() => setExportStatus(''), 3000);
+      return;
+    }
+
+    setIsSavingToDrive(true);
+    setExportStatus('Saving to Drive...');
+
+    const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const fileId = localStorage.getItem('tripJsonFileId');
+    const fileName = 'trip_expenses.json';
+
+    const boundary = '-------314159265358979323846';
+    const delimiter = "\r\n--" + boundary + "\r\n";
+    const close_delim = "\r\n--" + boundary + "--";
+
+    const metadata = {
+      name: fileName,
+      mimeType: 'application/json',
+    };
+
+    let multipartRequestBody;
+    let path;
+    let method;
+
+    if (fileId) {
+      // Update existing file
+      path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+      method = 'PATCH';
+      multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify({ name: fileName }) + // Only metadata that needs updating, if any. Or {} if only content.
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        dataToSave +
+        close_delim;
+    } else {
+      // Create new file
+      path = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+      method = 'POST';
+      multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(metadata) +
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        dataToSave +
+        close_delim;
+    }
+
+    try {
+      const response = await window.gapi.client.request({ // window.gapi
+        path: path,
+        method: method,
+        headers: {
+          'Content-Type': 'multipart/related; boundary="' + boundary + '"',
+        },
+        body: multipartRequestBody,
+      });
+
+      const newFileId = JSON.parse(response.body).id;
+      localStorage.setItem('tripJsonFileId', newFileId);
+      setExportStatus('✅ Saved to Drive');
+      console.log('File saved/updated with ID:', newFileId);
+    } catch (error) {
+      console.error('Error saving to Drive:', error);
+      setExportStatus(`❌ Save to Drive failed: ${error.result?.error?.message || error.message || 'Unknown error'}`);
+      // If file not found on update, clear local storage ID
+      if (error.result && error.result.error && error.result.error.code === 404 && fileId) {
+        localStorage.removeItem('tripJsonFileId');
+        setExportStatus('❌ Save failed (File not found on Drive, try saving again to create a new file)');
+      }
+    } finally {
+      setIsSavingToDrive(false);
+      setTimeout(() => setExportStatus(''), 5000); // Longer timeout for error messages
+    }
+  };
 
   const exportToPdf = async () => {
     setExportStatus('Exporting...');
@@ -352,13 +625,20 @@ const ExpenseSplitter = () => {
           if (data.participants && data.expenses && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
             setParticipants(data.participants);
             setExpenses(data.expenses);
-            alert('Data imported successfully!');
+            setExportStatus('✅ Data imported successfully!');
+            setTimeout(() => setExportStatus(''), 3000);
           } else {
-            throw new Error('Invalid file structure');
+            throw new Error('Invalid file structure.'); // Will be caught by catch block
           }
         } catch (error) {
           console.error('Import failed:', error);
-          alert('Invalid file format. Please select a valid expense splitter JSON file.');
+          // Check if it's the specific "Invalid file structure" error we threw
+          if (error.message === 'Invalid file structure.') {
+            setExportStatus('❌ Import failed: Invalid file structure.');
+          } else { // Generic error (e.g., JSON.parse failed)
+            setExportStatus(`❌ Import failed: ${error.message || 'Invalid file format.'}`);
+          }
+          setTimeout(() => setExportStatus(''), 5000);
         }
       };
       reader.readAsText(file);
@@ -377,27 +657,86 @@ const ExpenseSplitter = () => {
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Trip Expense Splitter</h1>
               <p className="text-gray-600">Track and split expenses fairly among participants</p>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center"> {/* Added items-center for alignment */}
+              {isAuthenticated && userInfo ? (
+                <div className="flex items-center gap-2">
+                  {userInfo.imageUrl && (
+                    <img src={userInfo.imageUrl} alt={userInfo.name} className="w-8 h-8 rounded-full" />
+                  )}
+                  <span className="text-sm text-gray-700">Hi, {userInfo.name || userInfo.email}</span>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center gap-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm"
+                  >
+                    <LogOut size={16} />
+                    Sign Out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSignIn}
+                  disabled={!authInstance}
+                  className={`flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors ${!authInstance ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <LogIn size={18} />
+                  Sign in with Google
+                </button>
+              )}
+
+              {/* Group 2: Manual File Operations */}
               <button
                 onClick={() => document.getElementById('import-file').click()}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
               >
                 <Upload size={18} />
-                Import
+                Upload JSON
               </button>
               <button
+                onClick={handleDownloadJson}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors text-gray-700"
+              >
+                <Download size={18} />
+                Download JSON
+              </button>
+
+              {/* Group 3: Google Drive Operations (Conditional on Authentication) */}
+              {isAuthenticated && (
+                <>
+                  <button
+                    onClick={handleSaveToDrive}
+                    disabled={isSavingToDrive || isLoadingFromDrive || !isAuthenticated}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors"
+                  >
+                    <Save size={18} />
+                    {isSavingToDrive ? 'Saving...' : 'Save to Drive'}
+                  </button>
+                  <button
+                    onClick={handleLoadFromDrive}
+                    disabled={isLoadingFromDrive || isSavingToDrive || !isAuthenticated}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
+                  >
+                    <FileUp size={18} />
+                    {isLoadingFromDrive ? 'Loading...' : 'Load from Drive'}
+                  </button>
+                </>
+              )}
+
+              {/* Group 4: Other Export Operations */}
+              <button
                 onClick={exportToPdf}
-                disabled={exportStatus === 'Exporting...'}
+                disabled={exportStatus.includes('Exporting...')}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg transition-colors"
               >
                 <Download size={18} />
                 Export PDF
               </button>
+
+              {/* Status Display */}
               {exportStatus && (
-                <div className={`flex items-center px-3 py-2 rounded-lg text-sm ${
+                <div className={`flex items-center px-3 py-1.5 rounded-lg text-xs ${ /* Adjusted padding and text size */
                   exportStatus.startsWith('✅') ? 'bg-green-100 text-green-800' :
                   exportStatus.startsWith('❌') ? 'bg-red-100 text-red-800' :
-                  'bg-blue-100 text-blue-800' // For 'Exporting...'
+                  'bg-blue-100 text-blue-800'
                 }`}>
                   {exportStatus}
                 </div>
