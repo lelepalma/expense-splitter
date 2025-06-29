@@ -56,7 +56,7 @@ const ExpenseSplitter = () => {
 
     setIsAuthenticated(true);
     // Placeholder user info until JWT is decoded or another method is used
-    setUserInfo({ name: 'User (GIS)', email: 'user@example.com (GIS)' }); // Basic user info from ID token
+    // setUserInfo({ name: 'User (GIS)', email: 'user@example.com (GIS)' }); // Basic user info from ID token
     setExportStatus('✅ ID Token received. Requesting Access Token...');
 
     // After getting the ID token, request an access token
