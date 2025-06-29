@@ -181,8 +181,7 @@ const handleLoadFromDrive = async () => {
   };
 
   const handleSaveToDrive = async () => {
-    // This function will need significant refactoring for GIS
-    if (!isAuthenticated /* || !gisAccessToken || !window.gapi?.client?.drive */) { // Placeholder for GIS check
+    if (!isAuthenticated) {
       setExportStatus("❌ Auth or Drive API not ready.");
       setTimeout(() => setExportStatus(''), 3000);
       return;
@@ -191,42 +190,39 @@ const handleLoadFromDrive = async () => {
     setIsSavingToDrive(true);
     setExportStatus('Saving to Drive...');
 
-    const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
-    const fileId = localStorage.getItem('tripJsonFileId');
-    const fileName = 'trip_expenses.json';
+    // const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const fileId = localStorage.getItem('tripJsonFileId'); // Keep fileId for the 404 check in catch
+    // const fileName = 'trip_expenses.json';
 
-    const boundary = '-------314159265358979323846';
-    const delimiter = "\r\n--" + boundary + "\r\n";
-    const close_delim = "\r\n--" + boundary + "--";
+    // const boundary = '-------314159265358979323846';
+    // const delimiter = "\r\n--" + boundary + "\r\n";
+    // const close_delim = "\r\n--" + boundary + "--";
 
-    const metadata = {
-      name: fileName,
-      mimeType: 'application/json',
-    };
+    // const metadata = {
+    //   name: fileName,
+    //   mimeType: 'application/json',
+    // };
 
-    let multipartRequestBody; // UNCOMMENTED
-    let path;                 // UNCOMMENTED
-    let method;               // UNCOMMENTED
+    // let multipartRequestBody;
+    // let path;
+    // let method;
 
     if (fileId) {
-      // Update existing file
-      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`; // Stays commented
-      // method = 'PATCH'; // Stays commented
-      /* multipartRequestBody assignment is already block commented, this is correct */
-      /*
+      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+      // method = 'PATCH';
+      /* multipartRequestBody =
         delimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify({ name: fileName }) + // Only metadata that needs updating, if any. Or {} if only content.
+        JSON.stringify({ name: fileName }) +
         delimiter +
         'Content-Type: application/json\r\n\r\n' +
         dataToSave +
         close_delim;
       */
     } else {
-      // These assignments will use the now-declared variables
-      path = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
-      method = 'POST';
-      multipartRequestBody =
+      // path = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+      // method = 'POST';
+      /* multipartRequestBody =
         delimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
         JSON.stringify(metadata) +
@@ -234,31 +230,21 @@ const handleLoadFromDrive = async () => {
         'Content-Type: application/json\r\n\r\n' +
         dataToSave +
         close_delim;
+      */
     }
 
     try {
-      // This part needs to be refactored to use fetch with Authorization header (Bearer token)
-      // const response = await window.gapi.client.request({
-      //   path: path, // This 'path' will be from the else block or undefined if fileId exists
-      //   method: method, // This 'method' will be from the else block or undefined
-      // });
       throw new Error("handleSaveToDrive needs refactoring for GIS");
-
-      // const newFileId = JSON.parse(response.body).id;
-      // localStorage.setItem('tripJsonFileId', newFileId);
-      // setExportStatus('✅ Saved to Drive');
-      // console.log('File saved/updated with ID:', newFileId);
     } catch (error) {
       console.error('Error saving to Drive:', error);
       setExportStatus(`❌ Save to Drive failed: ${error.message || (error.result?.error?.message) || 'Unknown error'}`);
-      // If file not found on update, clear local storage ID (moved from the removed duplicate catch)
       if (error.result && error.result.error && error.result.error.code === 404 && fileId) {
         localStorage.removeItem('tripJsonFileId');
         setExportStatus('❌ Save failed (File not found on Drive, try saving again to create a new file)');
       }
     } finally {
       setIsSavingToDrive(false);
-      setTimeout(() => setExportStatus(''), 5000); // Longer timeout for error messages
+      setTimeout(() => setExportStatus(''), 5000);
     }
   };
 
