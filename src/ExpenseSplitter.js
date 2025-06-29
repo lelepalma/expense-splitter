@@ -425,14 +425,18 @@ const handleLoadFromDrive = async () => {
     }
 
     const createPicker = () => {
-      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDER); // Changed to singular FOLDER
+      const view = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true);
+
 
       const picker = new window.google.picker.PickerBuilder()
         .addView(view)
         .setTitle("Select a folder to save in")
         .setOAuthToken(gisAccessToken)
-        .setDeveloperKey(GOOGLE_API_KEY) // GOOGLE_API_KEY is from previous steps
-        // .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED) // Removed this line
+        .setDeveloperKey(GOOGLE_API_KEY)
+        .enableFeature(window.google.picker.Feature.SUPPORT_DRIVES) // Optional, allows access to shared drives
+        .setSelectableMimeTypes('application/vnd.google-apps.folder') // ✅ critical for enabling the Select button
         .setCallback((data) => {
           if (data.action === window.google.picker.Action.PICKED) {
             const folder = data.docs[0];
