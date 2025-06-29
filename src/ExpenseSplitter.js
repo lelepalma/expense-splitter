@@ -425,14 +425,14 @@ const handleLoadFromDrive = async () => {
     }
 
     const createPicker = () => {
-      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS);
+      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDER); // Changed to singular FOLDER
 
       const picker = new window.google.picker.PickerBuilder()
         .addView(view)
         .setTitle("Select a folder to save in")
         .setOAuthToken(gisAccessToken)
         .setDeveloperKey(GOOGLE_API_KEY) // GOOGLE_API_KEY is from previous steps
-        .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED) // Added line
+        // .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED) // Removed this line
         .setCallback((data) => {
           if (data.action === window.google.picker.Action.PICKED) {
             const folder = data.docs[0];
