@@ -80,52 +80,35 @@ const ExpenseSplitter = () => {
     initializeGis();
   }, []); // Empty dependency array to run once on mount. handleSignInWithGoogleCallback should be memoized if defined in component scope and used here.
 
-  const handleLoadFromDrive = async () => {
-    // This function will need significant refactoring for GIS
-    if (!isAuthenticated /* || !gisAccessToken || !window.gapi?.client?.drive */ ) { // Placeholder for GIS check
-      setExportStatus("❌ Auth or Drive API not ready.");
-      setTimeout(() => setExportStatus(''), 3000);
-      return;
-    }
+const handleLoadFromDrive = async () => {
+  if (!isAuthenticated) { // Simplified initial check
+    setExportStatus("❌ Please sign in first.");
+    setTimeout(() => setExportStatus(''), 3000);
+    return;
+  }
+  const fileId = localStorage.getItem('tripJsonFileId');
+  if (!fileId) {
+    setExportStatus("ℹ️ No file previously saved to Drive to load.");
+    setTimeout(() => setExportStatus(''), 3000);
+    return;
+  }
 
-    const fileId = localStorage.getItem('tripJsonFileId');
-    if (!fileId) {
-      setExportStatus("ℹ️ No file found on Drive to load.");
-      setTimeout(() => setExportStatus(''), 3000);
-      return;
-    }
+  setIsLoadingFromDrive(true);
+  setExportStatus('Loading from Drive...');
 
-    setIsLoadingFromDrive(true);
-    setExportStatus('Loading from Drive...');
-
-    try {
-      // This part needs to be refactored to use fetch with Authorization header (Bearer token)
-      // const response = await window.gapi.client.drive.files.get({
-      //   fileId: fileId,
-      //   alt: 'media',
-      // });
-      // For now, let's assume it will fail or be refactored later
-      throw new Error("handleLoadFromDrive needs refactoring for GIS");
-
-      // const fileContent = response.body;
-      // const data = JSON.parse(fileContent);
-
-      // // Basic validation
-      // if (data && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
-      //   setParticipants(data.participants);
-      //   setExpenses(data.expenses);
-      //   // Balances and settlements will be recalculated by useMemo
-      //   setExportStatus('✅ Data loaded from Drive');
-      //   console.log('Data loaded from Drive:', data);
-      // } else {
-      //   throw new Error("Invalid file format or missing data.");
-      // }
-    } catch (error) {
-      console.error('Error loading from Drive:', error);
-      if (error.result && error.result.error && error.result.error.code === 404) {
-        setExportStatus('❌ File not found on Drive.');
-        localStorage.removeItem('tripJsonFileId');
-      }
+  try {
+    console.log("handleLoadFromDrive: TRY block. Drive call and response processing logic is pending GIS refactor.");
+    setExportStatus("ℹ️ Load from Drive: Functionality pending GIS update.");
+    // Actual drive call and data processing will be added here in Phase 2
+  } catch (error) {
+    console.error('Error in handleLoadFromDrive:', error);
+    setExportStatus(`❌ Load from Drive encountered an error: ${error.message || 'Unknown error'}`);
+  } finally {
+    setIsLoadingFromDrive(false);
+    // Use a general 5s for any message from this stubbed function for now
+    setTimeout(() => setExportStatus(''), 5000);
+  }
+};
   
 
       const fileContent = response.body;
