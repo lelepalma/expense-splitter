@@ -24,7 +24,7 @@ const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googlea
 // We will define it inside the component or pass setters to it.
 // For now, let's define its structure and move the logic from handleSignInWithGoogleCallback here.
 
-let topLevelTokenClient; // Renamed to avoid confusion with tokenClient inside component functions
+// let topLevelTokenClient; // Removed as it was unused
 
 // We will initialize topLevelTokenClient within useEffect after GIS is loaded.
 
@@ -152,7 +152,7 @@ const ExpenseSplitter = () => {
         setTimeout(() => setExportStatus(''), 5000);
       }
     }
-  }, [setIsAuthenticated, setExportStatus, handleAccessTokenResponseInternal, setUserInfo, isSafariMobile]);
+  }, [setIsAuthenticated, setExportStatus, handleAccessTokenResponseInternal]); // Removed setUserInfo, isSafariMobile
 
 
   // Effect to handle GIS initialization and rendering the sign-in button
