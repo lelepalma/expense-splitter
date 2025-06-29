@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable'; // Corrected import
 
 const ExpenseSplitter = () => {
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
@@ -19,6 +21,123 @@ const ExpenseSplitter = () => {
     splitType: 'equal'
   });
   const [exportStatus, setExportStatus] = useState('');
+
+  const exportToPdf = async () => {
+    setExportStatus('Exporting...');
+    try {
+      const doc = new jsPDF();
+
+      // Expenses Ledger Table
+      const expenseHeaders = ["Date", "Payee", "Description", "Amount", ...participants];
+
+      // PDF-specific calculation for display
+      const pdfParticipantTotals = {};
+      participants.forEach(p => { pdfParticipantTotals[p] = 0; });
+
+      const expenseRows = expenses.map(expense => {
+        const row = [
+          expense.date,
+          expense.payee,
+          expense.description,
+          `€ ${expense.amount.toFixed(2)}`, // EUR formatting with space
+        ];
+
+        const n = participants.length;
+        const baseShare = n > 0 ? expense.amount / n : 0;
+
+        participants.forEach(p_inner => {
+          let pdfDisplayValue = 0;
+          if (n > 0) { // Avoid division by zero if no participants somehow
+            if (p_inner === expense.payee) {
+              pdfDisplayValue = baseShare * (n - 1);
+            } else {
+              pdfDisplayValue = -baseShare;
+            }
+          }
+          pdfParticipantTotals[p_inner] += pdfDisplayValue;
+          row.push(`€ ${pdfDisplayValue.toFixed(2)}`);
+        });
+        return row;
+      });
+
+      // Expenses Table Title
+      doc.setFontSize(14);
+      doc.text("Expenses", 14, 15);
+
+      // Prepare Total Balance Row for PDF display
+      const totalExpensesSum = expenses.reduce((sum, e) => sum + e.amount, 0);
+      const pdfParticipantTotalStrings = participants.map(p => {
+        return `€ ${pdfParticipantTotals[p].toFixed(2)}`;
+      });
+
+      const totalBalanceRow = [
+        '', // Date
+        '', // Payee
+        { content: 'Total Balance:', styles: { halign: 'right', fontStyle: 'bold'} }, // Description
+        { content: `€ ${totalExpensesSum.toFixed(2)}`, styles: { fontStyle: 'bold'} }, // Amount (Overall total)
+        ...pdfParticipantTotalStrings.map(balStr => ({ content: balStr, styles: { fontStyle: 'bold'} })) // PDF specific totals
+      ];
+
+      const finalExpenseRows = [...expenseRows, totalBalanceRow];
+
+      doc.autoTable({
+        head: [expenseHeaders],
+        body: finalExpenseRows, // Use rows with PDF-specific display logic and totals
+        startY: 22, // Adjusted for title
+        headStyles: { halign: 'center', fillColor: [22, 160, 133] },
+        styles: { fontSize: 8, halign: 'center' },
+        didDrawCell: (data) => {
+          // Check if it's the last row of the body (Total Balance row)
+          if (data.table.body.length > 0 && data.row.index === data.table.body.length - 1) {
+            // The fontStyle is now set directly in the cell's `styles` object for the totalBalanceRow
+            // For a full row background color (optional, more complex):
+            // doc.setFillColor(240, 240, 240);
+            // doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+            // doc.setTextColor(0, 0, 0); // Reset text color if needed
+          }
+        }
+      });
+
+      // Settlement Summary Table Title
+      let settlementsY = doc.lastAutoTable.finalY + 15;
+      doc.setFontSize(14);
+      doc.text("Settlements Summary", 14, settlementsY);
+
+      if (settlements.length > 0) {
+        const settlementHeaders = ["From", "To", "Amount"];
+        const settlementRows = settlements.map(settlement => [
+          settlement.from,
+          settlement.to,
+          `€ ${settlement.amount.toFixed(2)}` // EUR formatting with space
+        ]);
+
+        doc.autoTable({
+          head: [settlementHeaders],
+          body: settlementRows,
+          startY: settlementsY + 7, // Adjusted for title
+          headStyles: { halign: 'center', fillColor: [22, 160, 133] },
+          styles: { fontSize: 8, halign: 'center' },
+        });
+      } else {
+        // Position "No settlements" text after the "Settlements Summary" title
+        const text = "No settlements needed - everyone is even!";
+        // Font size for this text should ideally be the default or smaller than title
+        doc.setFontSize(10); // Resetting to a smaller size for this message
+        const textWidth = doc.getStringUnitWidth(text) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const x = (pageWidth - textWidth) / 2;
+        doc.text(text, x, settlementsY + 7); // Positioned after title space
+      }
+
+      doc.save('expense_report.pdf');
+      setExportStatus('✅ PDF exported!');
+    } catch (error) {
+      console.error('PDF Export failed:', error);
+      setExportStatus('❌ Export failed');
+    } finally {
+      setTimeout(() => setExportStatus(''), 3000);
+    }
+  };
 
   // Calculate balances
   const balances = useMemo(() => {
@@ -145,83 +264,83 @@ const ExpenseSplitter = () => {
     setExpenses(expenses.filter(e => e.id !== id));
   };
 
-  const exportData = async () => {
-    try {
-      const data = {
-        participants,
-        expenses,
-        balances,
-        settlements,
-        exportDate: new Date().toISOString(),
-        totalExpenses: expenses.reduce((sum, e) => sum + e.amount, 0)
-      };
+  // const exportData = async () => { // Commenting out old exportData
+  //   try {
+  //     const data = {
+  //       participants,
+  //       expenses,
+  //       balances,
+  //       settlements,
+  //       exportDate: new Date().toISOString(),
+  //       totalExpenses: expenses.reduce((sum, e) => sum + e.amount, 0)
+  //     };
       
-      const jsonString = JSON.stringify(data, null, 2);
+  //     const jsonString = JSON.stringify(data, null, 2);
       
-      setExportStatus('Exporting...');
+  //     setExportStatus('Exporting...');
       
-      // For mobile compatibility, try clipboard first
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        try {
-          await navigator.clipboard.writeText(jsonString);
-          setExportStatus('✅ Data copied to clipboard!');
-          setTimeout(() => setExportStatus(''), 3000);
-          return;
-        } catch (clipboardErr) {
-          console.log('Clipboard failed, trying other methods');
-        }
-      }
+  //     // For mobile compatibility, try clipboard first
+  //     if (navigator.clipboard && navigator.clipboard.writeText) {
+  //       try {
+  //         await navigator.clipboard.writeText(jsonString);
+  //         setExportStatus('✅ Data copied to clipboard!');
+  //         setTimeout(() => setExportStatus(''), 3000);
+  //         return;
+  //       } catch (clipboardErr) {
+  //         console.log('Clipboard failed, trying other methods');
+  //       }
+  //     }
       
-      // Try Web Share API if available (mobile)
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: 'Expense Split Data',
-            text: jsonString
-          });
-          setExportStatus('✅ Data shared successfully!');
-          setTimeout(() => setExportStatus(''), 3000);
-          return;
-        } catch (shareErr) {
-          console.log('Share failed, showing modal');
-        }
-      }
+  //     // Try Web Share API if available (mobile)
+  //     if (navigator.share) {
+  //       try {
+  //         await navigator.share({
+  //           title: 'Expense Split Data',
+  //           text: jsonString
+  //         });
+  //         setExportStatus('✅ Data shared successfully!');
+  //         setTimeout(() => setExportStatus(''), 3000);
+  //         return;
+  //       } catch (shareErr) {
+  //         console.log('Share failed, showing modal');
+  //       }
+  //     }
       
-      // Fallback: show modal with data
-      showExportModal(jsonString);
-      setExportStatus('');
+  //     // Fallback: show modal with data
+  //     showExportModal(jsonString);
+  //     setExportStatus('');
       
-    } catch (error) {
-      console.error('Export failed:', error);
-      setExportStatus('❌ Export failed');
-      setTimeout(() => setExportStatus(''), 3000);
-    }
-  };
+  //   } catch (error) {
+  //     console.error('Export failed:', error);
+  //     setExportStatus('❌ Export failed');
+  //     setTimeout(() => setExportStatus(''), 3000);
+  //   }
+  // };
 
-  const showExportModal = (jsonString) => {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-      background: rgba(0,0,0,0.8); z-index: 1000; 
-      display: flex; align-items: center; justify-content: center; padding: 20px;
-    `;
+  // const showExportModal = (jsonString) => { // Removed function
+  //   const modal = document.createElement('div');
+  //   modal.style.cssText = `
+  //     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  //     background: rgba(0,0,0,0.8); z-index: 1000;
+  //     display: flex; align-items: center; justify-content: center; padding: 20px;
+  //   `;
     
-    const content = document.createElement('div');
-    content.style.cssText = `
-      background: white; border-radius: 10px; padding: 20px; 
-      max-width: 90%; max-height: 80%; overflow: auto;
-    `;
+  //   const content = document.createElement('div');
+  //   content.style.cssText = `
+  //     background: white; border-radius: 10px; padding: 20px;
+  //     max-width: 90%; max-height: 80%; overflow: auto;
+  //   `;
     
-    content.innerHTML = `
-      <h3 style="margin-top: 0;">Export Data</h3>
-      <p>Copy the text below and save it as a .json file:</p>
-      <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; padding: 10px;">${jsonString}</textarea>
-      <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px;">Close</button>
-    `;
+  //   content.innerHTML = `
+  //     <h3 style="margin-top: 0;">Export Data</h3>
+  //     <p>Copy the text below and save it as a .json file:</p>
+  //     <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; padding: 10px;">${jsonString}</textarea>
+  //     <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 5px;">Close</button>
+  //   `;
     
-    modal.appendChild(content);
-    document.body.appendChild(modal);
-  };
+  //   modal.appendChild(content);
+  //   document.body.appendChild(modal);
+  // };
 
   const importData = (event) => {
     const file = event.target.files[0];
@@ -267,15 +386,19 @@ const ExpenseSplitter = () => {
                 Import
               </button>
               <button
-                onClick={exportData}
+                onClick={exportToPdf}
                 disabled={exportStatus === 'Exporting...'}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg transition-colors"
               >
                 <Download size={18} />
-                Export
+                Export PDF
               </button>
               {exportStatus && (
-                <div className="flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg text-sm">
+                <div className={`flex items-center px-3 py-2 rounded-lg text-sm ${
+                  exportStatus.startsWith('✅') ? 'bg-green-100 text-green-800' :
+                  exportStatus.startsWith('❌') ? 'bg-red-100 text-red-800' :
+                  'bg-blue-100 text-blue-800' // For 'Exporting...'
+                }`}>
                   {exportStatus}
                 </div>
               )}
