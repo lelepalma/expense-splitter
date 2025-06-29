@@ -77,58 +77,46 @@ const ExpenseSplitter = () => {
   const handleAccessTokenResponseInternal = useCallback((tokenResponse) => {
     if (tokenResponse && tokenResponse.access_token) {
       setGisAccessToken(tokenResponse.access_token);
+      setIsAuthenticated(true); // Also set authenticated true here
       setExportStatus('✅ Access Token obtained!');
       console.log('Access Token:', tokenResponse.access_token);
-      // TODO: Optionally, decode ID token here for more user info if needed
+      // Optionally decode ID token for user info if not already done
+      // Or fetch user profile using the access token
     } else {
       setExportStatus('❌ Failed to obtain Access Token.');
       console.error('Failed to obtain access token', tokenResponse);
+      setIsAuthenticated(false);
     }
-    setTimeout(() => setExportStatus(''), 5000); // Longer display for token status
-  }, [setGisAccessToken, setExportStatus]); // Added dependencies
+    setTimeout(() => setExportStatus(''), 5000);
+  }, [setGisAccessToken, setExportStatus, setIsAuthenticated]); // Added setIsAuthenticated
 
   const handleSignInWithGoogleCallback = useCallback((response) => {
     console.log('ID Token response:', response);
-    console.log('Client ID:', response.clientId);
-    console.log('Credential (JWT):', response.credential);
+    // This callback is primarily for the One Tap or Sign In With Google button press.
+    // It gives an ID token. For Safari mobile, we'll initiate a code flow.
+    // For other browsers, we can use this ID token to imply authentication and then request an access token.
 
-    setIsAuthenticated(true);
-    // User info from ID token can be decoded here if needed:
-    // try {
-    //   const idToken = jwt_decode(response.credential); // Requires a JWT decoding library
-    //   setUserInfo({ name: idToken.name, email: idToken.email, imageUrl: idToken.picture });
-    // } catch (e) { console.error("Error decoding ID token", e); }
-
-
-    if (isSafariMobile) {
-      setExportStatus('✅ ID Token received. Preparing for redirect-based authorization...');
-      // For Safari mobile, use the redirect flow to get an authorization code.
-      // This code will be exchanged for tokens on a dedicated callback page/handler.
-      // Ensure redirect_uri is correctly configured in Google Cloud Console.
-      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-        const codeClient = window.google.accounts.oauth2.initCodeClient({
-          client_id: GOOGLE_OAUTH_CLIENT_ID,
-          scope: SCOPES,
-          ux_mode: 'redirect',
-          redirect_uri: window.location.origin + '/auth-callback.html', // Ensure this page can handle the code
-        });
-        codeClient.requestCode(); // This will trigger the redirect
-      } else {
-        console.error('Google OAuth2 client not available for redirect.');
-        setExportStatus('❌ Google OAuth2 client not ready for redirect.');
-        setTimeout(() => setExportStatus(''), 5000);
-      }
-    } else {
-      // For other browsers, proceed with getting an access token directly.
-      setExportStatus('✅ ID Token received. Requesting Access Token...');
+    // For non-Safari, we assume the ID token means basic auth is successful,
+    // then we try to get an access token.
+    // If isSafariMobile, this callback will trigger the redirect flow.
+    // The actual access token acquisition for Safari will happen after redirect.
+    if (!isSafariMobile) {
+      setIsAuthenticated(true); // Assume authenticated after ID token
+      // User info from ID token can be decoded here if needed:
+      // try {
+      //   const idToken = jwt_decode(response.credential); // Requires a JWT decoding library
+      //   setUserInfo({ name: idToken.name, email: idToken.email, imageUrl: idToken.picture });
+      // } catch (e) { console.error("Error decoding ID token", e); }
+      setExportStatus('✅ Sign-in successful. Requesting Access Token...');
       if (window.google && window.google.accounts && window.google.accounts.oauth2) {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_OAUTH_CLIENT_ID,
           scope: SCOPES,
-          callback: handleAccessTokenResponseInternal, // Common handler for token response
+          callback: handleAccessTokenResponseInternal,
           error_callback: (error) => {
             console.error('Access Token Error:', error);
             setExportStatus(`❌ Access Token Error: ${error.type || error.message || 'Unknown error'}`);
+            setIsAuthenticated(false);
             setTimeout(() => setExportStatus(''), 5000);
           }
         });
@@ -136,30 +124,56 @@ const ExpenseSplitter = () => {
       } else {
         console.error('Google OAuth2 client not available for token request.');
         setExportStatus('❌ Google OAuth2 client not ready for token request.');
+        setIsAuthenticated(false);
+        setTimeout(() => setExportStatus(''), 5000);
+      }
+    } else {
+      // For Safari mobile, initiate the redirect code flow.
+      // The actual token exchange will happen after the redirect.
+      console.log('Safari mobile detected. Initiating redirect code flow...');
+      setExportStatus('🚀 Safari mobile: Redirecting for authorization...');
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+        // Generate and store state for CSRF protection
+        const state = Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('google_auth_state_generated', state);
+        console.log('Generated state for CSRF:', state);
+
+        const codeClient = window.google.accounts.oauth2.initCodeClient({
+          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          scope: SCOPES,
+          ux_mode: 'redirect',
+          redirect_uri: window.location.origin + '/auth-callback.html',
+          state: state, // Add state for CSRF protection
+        });
+        codeClient.requestCode();
+      } else {
+        console.error('Google OAuth2 client not available for redirect.');
+        setExportStatus('❌ Google OAuth2 client not ready for redirect.');
         setTimeout(() => setExportStatus(''), 5000);
       }
     }
-  }, [setIsAuthenticated, setExportStatus, handleAccessTokenResponseInternal, setUserInfo]); // Added setUserInfo, isSafariMobile is stable
+  }, [setIsAuthenticated, setExportStatus, handleAccessTokenResponseInternal, setUserInfo, isSafariMobile]);
 
+
+  // Effect to handle GIS initialization and rendering the sign-in button
   useEffect(() => {
     const initializeGis = () => {
-      // Check for both id and oauth2 before proceeding fully, as both might be needed by callbacks.
       if (window.google && window.google.accounts && window.google.accounts.id && window.google.accounts.oauth2) {
         console.log('GIS client (id and oauth2) found, initializing ID services...');
         window.google.accounts.id.initialize({
           client_id: GOOGLE_OAUTH_CLIENT_ID,
-          callback: handleSignInWithGoogleCallback, // This callback now handles Safari redirect logic
+          callback: handleSignInWithGoogleCallback,
         });
         console.log('GIS ID services initialized.');
-        
+
         const signInButtonContainer = document.getElementById('signInDiv');
-        if (signInButtonContainer) {
+        if (signInButtonContainer && !signInButtonContainer.hasChildNodes()) { // Render only if not already rendered
             window.google.accounts.id.renderButton(
                 signInButtonContainer,
                 { theme: 'outline', size: 'large', type: 'standard', text: 'signin_with' }
             );
             console.log('GIS Sign-In button rendered.');
-        } else {
+        } else if (!signInButtonContainer) {
             console.error('signInDiv not found for GIS button rendering.');
         }
       } else {
@@ -168,27 +182,105 @@ const ExpenseSplitter = () => {
       }
     };
     initializeGis();
-  }, [handleSignInWithGoogleCallback]); // Added handleSignInWithGoogleCallback to dependencies
+  }, [handleSignInWithGoogleCallback]);
+
+  // Effect to handle the redirect callback for authorization code
+  useEffect(() => {
+    const authCode = localStorage.getItem('google_auth_code');
+    const receivedState = localStorage.getItem('google_auth_state_received');
+    const generatedState = sessionStorage.getItem('google_auth_state_generated');
+    const authError = localStorage.getItem('google_auth_error');
+
+    // Clear localStorage items immediately after reading them
+    localStorage.removeItem('google_auth_code');
+    localStorage.removeItem('google_auth_state_received');
+    localStorage.removeItem('google_auth_error');
+    // Do not clear sessionStorage.getItem('google_auth_state_generated') here,
+    // it's cleared after successful validation or if not needed.
+
+    if (authError) {
+      console.error('Error from auth callback:', authError);
+      setExportStatus(`❌ Authentication Error: ${authError}`);
+      setIsAuthenticated(false);
+      setTimeout(() => setExportStatus(''), 7000);
+      sessionStorage.removeItem('google_auth_state_generated'); // Clean up state
+      return;
+    }
+
+    if (authCode) {
+      console.log('Received auth code from localStorage:', authCode);
+      console.log('Received state from localStorage:', receivedState);
+      console.log('Generated state from sessionStorage:', generatedState);
+
+      if (isSafariMobile) { // Only proceed if this flow was initiated by Safari Mobile logic
+        if (!generatedState || receivedState !== generatedState) {
+          console.error('State mismatch for CSRF protection. Aborting token exchange.');
+          setExportStatus('❌ CSRF Warning: State mismatch. Please try signing in again.');
+          setIsAuthenticated(false);
+          sessionStorage.removeItem('google_auth_state_generated'); // Clean up state
+          setTimeout(() => setExportStatus(''), 7000);
+          return;
+        }
+        console.log('State validated successfully.');
+        sessionStorage.removeItem('google_auth_state_generated'); // Clean up state after successful validation
+
+        setExportStatus('⏳ Exchanging authorization code for token...');
+        const tokenRequestBody = new URLSearchParams();
+        tokenRequestBody.append('code', authCode);
+        tokenRequestBody.append('client_id', GOOGLE_OAUTH_CLIENT_ID);
+        tokenRequestBody.append('redirect_uri', window.location.origin + '/auth-callback.html');
+        tokenRequestBody.append('grant_type', 'authorization_code');
+
+        fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: tokenRequestBody.toString(),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.access_token) {
+            console.log('Token exchange successful:', data);
+            handleAccessTokenResponseInternal(data); // Use the common handler
+          } else {
+            console.error('Token exchange failed:', data);
+            setExportStatus(`❌ Token Exchange Failed: ${data.error_description || data.error || 'Unknown error'}`);
+            setIsAuthenticated(false);
+            setTimeout(() => setExportStatus(''), 7000);
+          }
+        })
+        .catch(error => {
+          console.error('Error during token exchange:', error);
+          setExportStatus(`❌ Token Exchange Error: ${error.message}`);
+          setIsAuthenticated(false);
+          setTimeout(() => setExportStatus(''), 7000);
+        });
+      } else {
+        // If not Safari Mobile, this code might be from a previous unfinished attempt.
+        // It's generally safer to ignore it if the main flow didn't expect it.
+        console.warn("Auth code found but not processed as it's not Safari Mobile context or state mismatch.");
+        sessionStorage.removeItem('google_auth_state_generated'); // Clean up state
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount to check for redirect parameters. Dependencies: handleAccessTokenResponseInternal if it changes.
 
   useEffect(() => {
     const loadPickerApi = () => {
       if (window.gapi && window.gapi.load) {
         window.gapi.load('picker', { 'callback': () => {
           console.log('Google Picker API loaded.');
-          // The Picker API does not require gapi.client.init for its basic operation with an API key.
-          // It primarily uses the API key during PickerBuilder().setDeveloperKey(developerKey)
-          // and OAuth token for file access.
           setIsPickerApiLoaded(true);
         }});
       } else {
-        // Retry if gapi is not immediately available
         console.warn('gapi client not ready yet for Picker, retrying in 500ms...');
         setTimeout(loadPickerApi, 500);
       }
     };
-
     loadPickerApi();
-  }, []); // Empty dependency array to run once on mount
+  }, []);
+
 
 const handleLoadFromDrive = async () => {
   if (!gisAccessToken) {

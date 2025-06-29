@@ -6,7 +6,32 @@
 </head>
 <body>
   <script>
-    // Just return to home after login
+    // Function to parse URL query parameters
+    function getQueryParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    const code = getQueryParam('code');
+    const state = getQueryParam('state');
+    const error = getQueryParam('error');
+
+    if (error) {
+      console.error('Error during Google Auth redirect:', error);
+      // Store the error to be displayed by the main app
+      localStorage.setItem('google_auth_error', error);
+    } else if (code) {
+      localStorage.setItem('google_auth_code', code);
+      if (state) {
+        localStorage.setItem('google_auth_state_received', state);
+      }
+      console.log('Authorization code and state captured in auth-callback.html');
+    } else {
+      console.warn('No authorization code or error found in URL in auth-callback.html');
+      localStorage.setItem('google_auth_error', 'Authorization failed: No code or error returned.');
+    }
+
+    // Redirect back to the main application
     window.location.href = "/";
   </script>
 </body>
