@@ -123,7 +123,10 @@ const ExpenseSplitter = () => {
     } catch (error) {
       console.error('Error loading from Drive:', error);
       if (error.result && error.result.error && error.result.error.code === 404) {
-      });
+        setExportStatus('❌ File not found on Drive.');
+        localStorage.removeItem('tripJsonFileId');
+      }
+  
 
       const fileContent = response.body;
       const data = JSON.parse(fileContent);
