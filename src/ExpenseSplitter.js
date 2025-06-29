@@ -432,6 +432,7 @@ const handleLoadFromDrive = async () => {
         .setTitle("Select a folder to save in")
         .setOAuthToken(gisAccessToken)
         .setDeveloperKey(GOOGLE_API_KEY) // GOOGLE_API_KEY is from previous steps
+        .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED) // Added line
         .setCallback((data) => {
           if (data.action === window.google.picker.Action.PICKED) {
             const folder = data.docs[0];
