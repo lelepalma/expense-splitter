@@ -425,22 +425,21 @@ const handleLoadFromDrive = async () => {
     }
 
     const createPicker = () => {
-      console.log('[Save As] createPicker function called.');
-      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS);
+      console.log('[Save As] createPicker function called.'); // LOG 1
+      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS); // Simplest view
 
       const picker = new window.google.picker.PickerBuilder()
         .addView(view)
         .setTitle("Select a folder to save in")
         .setOAuthToken(gisAccessToken)
-        .setDeveloperKey(GOOGLE_API_KEY) // GOOGLE_API_KEY is from previous steps
+        .setDeveloperKey(GOOGLE_API_KEY)
         .setCallback((data) => {
           if (data.action === window.google.picker.Action.PICKED) {
             const folder = data.docs[0];
             if (folder && folder.id) {
               const folderId = folder.id;
               setExportStatus(`Folder selected: ${folder.name}. Preparing to save...`);
-              // Proceed to upload the file to this folderId with the prompted fileName
-              uploadFileToDrive(fileName, folderId);
+              uploadFileToDrive(fileName, folderId); // fileName is from the outer scope of handleSaveAsToDrive
             } else {
               setExportStatus("❌ No folder selected or folder ID missing.");
               setTimeout(() => setExportStatus(''), 3000);
@@ -451,7 +450,7 @@ const handleLoadFromDrive = async () => {
           }
         })
         .build();
-      console.log('[Save As] About to call picker.setVisible(true). Picker object:', picker);
+      console.log('[Save As] About to call picker.setVisible(true). Picker object:', picker); // LOG 2
       picker.setVisible(true);
     };
     createPicker();
