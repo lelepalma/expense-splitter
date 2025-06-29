@@ -426,8 +426,8 @@ const handleLoadFromDrive = async () => {
 
     const createPicker = () => {
       const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS)
-        .setMimeTypes(["application/vnd.google-apps.folder"])
-        .setSelectableMimeTypes("application/vnd.google-apps.folder") // Ensure only folders can be picked
+
+        .setSelectableMimeTypes("application/vnd.google-apps.folder")
         .setOwnedByMe(true); // Optional: filter for user-owned folders
 
       const picker = new window.google.picker.PickerBuilder()
