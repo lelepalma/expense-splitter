@@ -425,8 +425,7 @@ const handleLoadFromDrive = async () => {
     }
 
     const createPicker = () => {
-      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS)
-        .setOwnedByMe(true);
+      const view = new window.google.picker.View(window.google.picker.ViewId.FOLDERS);
 
       const picker = new window.google.picker.PickerBuilder()
         .addView(view)
