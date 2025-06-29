@@ -11,9 +11,10 @@ const GOOGLE_OAUTH_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
 // However, if both are intended, list them:
 // const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4", "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 // const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]; // Commented out DISCOVERY_DOCS
-// const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope, now commented out
+const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file"; // Added Drive scope, now uncommented
 
 const ExpenseSplitter = () => {
+  const [gisAccessToken, setGisAccessToken] = useState(null); // Added state for GIS Access Token
   const [participants, setParticipants] = useState(['Alice', 'Bob', 'Charlie']);
   const [expenses, setExpenses] = useState([
     { id: 1, date: '2025-06-25', payee: 'Alice', description: 'Dinner', amount: 120, splits: { Alice: 40, Bob: 40, Charlie: 40 } },
@@ -47,9 +48,33 @@ const ExpenseSplitter = () => {
 
     setIsAuthenticated(true);
     // Placeholder user info until JWT is decoded or another method is used
-    setUserInfo({ name: 'User (GIS)', email: 'user@example.com (GIS)' });
-    setExportStatus('✅ Signed in with GIS (basic).');
-    setTimeout(() => setExportStatus(''), 3000);
+    setUserInfo({ name: 'User (GIS)', email: 'user@example.com (GIS)' }); // Basic user info from ID token
+    setExportStatus('✅ ID Token received. Requesting Access Token...');
+
+    // After getting the ID token, request an access token
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_OAUTH_CLIENT_ID,
+      scope: SCOPES,
+      callback: (tokenResponse) => {
+        if (tokenResponse && tokenResponse.access_token) {
+          setGisAccessToken(tokenResponse.access_token);
+          setExportStatus('✅ Access Token obtained!');
+          console.log('Access Token:', tokenResponse.access_token);
+          // TODO: Optionally, decode ID token (response.credential) here for more user info if needed
+          // For example: const decodedIdToken = jwt_decode(response.credential); setUserInfo({name: decodedIdToken.name, email: decodedIdToken.email, imageUrl: decodedIdToken.picture});
+        } else {
+          setExportStatus('❌ Failed to obtain Access Token.');
+          console.error('Failed to obtain access token', tokenResponse);
+        }
+        setTimeout(() => setExportStatus(''), 5000); // Longer display for token status
+      },
+      error_callback: (error) => {
+        console.error('Access Token Error:', error);
+        setExportStatus(`❌ Access Token Error: ${error.type || error.message || 'Unknown error'}`);
+        setTimeout(() => setExportStatus(''), 5000);
+      }
+    });
+    tokenClient.requestAccessToken();
   };
 
   useEffect(() => {
@@ -150,13 +175,22 @@ const handleLoadFromDrive = async () => {
     if (window.google && window.google.accounts && window.google.accounts.id) {
       window.google.accounts.id.disableAutoSelect();
     }
+    // Revoke access token if it exists
+    if (gisAccessToken && window.google && window.google.accounts && window.google.accounts.oauth2) {
+      window.google.accounts.oauth2.revoke(gisAccessToken, () => {
+        console.log('GIS Access token revoked.');
+        setExportStatus('ⓘ Access token revoked.');
+        setTimeout(() => setExportStatus(''), 3000);
+      });
+    }
+    setGisAccessToken(null); // Clear access token from state
+
     setIsAuthenticated(false);
     setUserInfo(null);
-    // TODO: Clear any GIS specific tokens or session info if stored separately
     console.log('User signed out via GIS.');
-    setExportStatus('ⓘ Signed out.');
+    setExportStatus('ⓘ Signed out.'); // This might overwrite the "token revoked" message quickly
     setTimeout(() => setExportStatus(''), 3000);
-  }, [setIsAuthenticated, setUserInfo, setExportStatus]);
+  }, [gisAccessToken, setIsAuthenticated, setUserInfo, setExportStatus, setGisAccessToken]); // Added gisAccessToken and setGisAccessToken to dependencies
 
   const handleDownloadJson = async () => {
     setExportStatus('Preparing JSON download...');
@@ -651,7 +685,7 @@ const handleLoadFromDrive = async () => {
                 <>
                   <button
                     onClick={handleSaveToDrive}
-                    disabled={isSavingToDrive || isLoadingFromDrive || !isAuthenticated}
+                    disabled={isSavingToDrive || isLoadingFromDrive || !gisAccessToken}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors"
                   >
                     <Save size={18} />
@@ -659,7 +693,7 @@ const handleLoadFromDrive = async () => {
                   </button>
                   <button
                     onClick={handleLoadFromDrive}
-                    disabled={isLoadingFromDrive || isSavingToDrive || !isAuthenticated}
+                    disabled={isLoadingFromDrive || isSavingToDrive || !gisAccessToken}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors"
                   >
                     <FileUp size={18} />
