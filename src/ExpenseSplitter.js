@@ -5,7 +5,7 @@ import 'jspdf-autotable'; // Corrected import
 // import { gapi } from 'gapi-script'; // Removed gapi-script import
 
 // Placeholder for Google OAuth Client ID
-const GOOGLE_OAUTH_CLIENT_ID = "215117254956-jk2m2upc45k6s65q56vh03g9utr7lr33.apps.googleusercontent.com";
+const GOOGLE_OAUTH_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
 // const API_KEY = "YOUR_API_KEY_HERE"; // Removed API_KEY
 // Note: DISCOVERY_DOCS for sheets is not strictly needed if only using Drive.
 // However, if both are intended, list them:
@@ -106,8 +106,8 @@ const ExpenseSplitter = () => {
   }, []); // Empty dependency array to run once on mount. handleSignInWithGoogleCallback should be memoized if defined in component scope and used here.
 
 const handleLoadFromDrive = async () => {
-  if (!isAuthenticated) { // Simplified initial check
-    setExportStatus("❌ Please sign in first.");
+  if (!gisAccessToken) {
+    setExportStatus("❌ Access Token not available. Please sign in again.");
     setTimeout(() => setExportStatus(''), 3000);
     return;
   }
@@ -122,42 +122,52 @@ const handleLoadFromDrive = async () => {
   setExportStatus('Loading from Drive...');
 
   try {
-    // TODO: Implement actual Drive loading logic here.
-    // For now, keeping the placeholder message.
-    console.log("handleLoadFromDrive: TRY block. Drive call and response processing logic is pending GIS refactor.");
-    setExportStatus("ℹ️ Load from Drive: Functionality pending GIS update.");
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${gisAccessToken}`,
+      },
+    });
 
-    // The following lines are problematic because 'response' is not defined.
-    // They were part of the orphaned block. For now, to fix the syntax,
-    // they are commented out. A proper implementation is needed.
-    // const fileContent = response.body;
-    // const data = JSON.parse(fileContent);
-    // if (data && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
-    //   setParticipants(data.participants);
-    //   setExpenses(data.expenses);
-    //   setExportStatus('✅ Data loaded from Drive');
-    //   console.log('Data loaded from Drive:', data);
-    // } else {
-    //   throw new Error("Invalid file format or missing data.");
-    // }
-  } catch (error) {
-      console.error('Error loading from Drive:', error);
-      if (error.result && error.result.error && error.result.error.code === 404) {
-        setExportStatus('❌ File not found on Drive.');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({})); // Try to parse error, default to empty obj
+      console.error('Drive API Error Response (Load):', errorData);
+      // Check for 404 specifically, as it's a common case
+      if (response.status === 404) {
         localStorage.removeItem('tripJsonFileId'); // Clear stale file ID
-      } else if (error instanceof SyntaxError) {
-        setExportStatus('❌ Failed to parse file from Drive (invalid JSON).');
-      } else if (error instanceof ReferenceError && error.message.includes("response is not defined")) {
-        // This error is expected if the commented-out block above is uncommented without defining 'response'
-        setExportStatus('ℹ️ Load from Drive: Not fully implemented.');
-        console.warn("handleLoadFromDrive: 'response' is not defined. Actual Drive API call needed.");
+        throw new Error(`File not found on Drive (ID: ${fileId}).`);
       }
-      else {
-        setExportStatus(`❌ Load from Drive failed: ${error.message || 'Unknown error'}`);
-      }
+      throw new Error(`Drive API Error: ${response.status} ${response.statusText}. ${errorData?.error?.message || ''}`);
+    }
+
+    const fileContent = await response.json(); // Assuming the file content is JSON
+
+    if (fileContent && Array.isArray(fileContent.participants) && Array.isArray(fileContent.expenses)) {
+      setParticipants(fileContent.participants);
+      setExpenses(fileContent.expenses);
+      setExportStatus('✅ Data loaded from Drive');
+      console.log('Data loaded from Drive:', fileContent);
+    } else {
+      throw new Error("Invalid file format or missing data from Drive file.");
+    }
+
+  } catch (error) {
+    console.error('Error loading from Drive:', error);
+    let errorMessage = error.message || 'Unknown error';
+    if (error.message?.includes("File not found on Drive")) {
+        errorMessage = "❌ File not found on Drive. It might have been deleted or permissions changed.";
+        localStorage.removeItem('tripJsonFileId'); // Ensure stale ID is cleared
+    } else if (error instanceof SyntaxError) { // Error parsing the JSON from Drive
+        errorMessage = '❌ Failed to parse file from Drive (invalid JSON).';
+    } else if (error.message?.includes("Drive API Error")) { // Error from the fetch response.ok check
+        errorMessage = `❌ Load from Drive failed: ${error.message}`;
+    } else { // Other generic errors
+        errorMessage = `❌ Load from Drive failed: ${errorMessage}`;
+    }
+    setExportStatus(errorMessage);
   } finally {
-      setIsLoadingFromDrive(false);
-      setTimeout(() => setExportStatus(''), 5000); // Longer timeout for messages
+    setIsLoadingFromDrive(false);
+    setTimeout(() => setExportStatus(''), 5000);
   }
 };
 
@@ -215,8 +225,8 @@ const handleLoadFromDrive = async () => {
   };
 
   const handleSaveToDrive = async () => {
-    if (!isAuthenticated) {
-      setExportStatus("❌ Auth or Drive API not ready.");
+    if (!gisAccessToken) {
+      setExportStatus("❌ Access Token not available. Please sign in again.");
       setTimeout(() => setExportStatus(''), 3000);
       return;
     }
@@ -224,55 +234,78 @@ const handleLoadFromDrive = async () => {
     setIsSavingToDrive(true);
     setExportStatus('Saving to Drive...');
 
-    // const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
-    const fileId = localStorage.getItem('tripJsonFileId'); // Keep fileId for the 404 check in catch
-    // const fileName = 'trip_expenses.json';
+    const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const fileId = localStorage.getItem('tripJsonFileId');
+    const fileName = 'trip_expenses.json';
 
-    // const boundary = '-------314159265358979323846';
-    // const delimiter = "\r\n--" + boundary + "\r\n";
-    // const close_delim = "\r\n--" + boundary + "--";
+    const boundary = '-------314159265358979323846'; // Used in multipart body
+    const delimiter = "\r\n--" + boundary + "\r\n";
+    const close_delim = "\r\n--" + boundary + "--";
 
-    // const metadata = {
-    //   name: fileName,
-    //   mimeType: 'application/json',
-    // };
+    const driveMetadata = { // Renamed to avoid conflict with 'metadata' variable if any
+      name: fileName,
+      mimeType: 'application/json',
+    };
 
-    // let multipartRequestBody;
-    // let path;
-    // let method;
+    let multipartRequestBody;
+    let uploadPath; // Renamed from path to avoid conflict with possible window.path
+    let httpMethod; // Renamed from method to avoid conflict
 
     if (fileId) {
-      // path = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
-      // method = 'PATCH';
-      /* multipartRequestBody =
+      uploadPath = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`;
+      httpMethod = 'PATCH';
+      multipartRequestBody =
         delimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify({ name: fileName }) +
+        JSON.stringify({ name: fileName }) + // Only metadata that needs updating for PATCH (e.g. name if changed)
         delimiter +
         'Content-Type: application/json\r\n\r\n' +
         dataToSave +
         close_delim;
-      */
     } else {
-      // path = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
-      // method = 'POST';
-      /* multipartRequestBody =
+      uploadPath = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+      httpMethod = 'POST';
+      multipartRequestBody =
         delimiter +
         'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify(metadata) +
+        JSON.stringify(driveMetadata) + // Full metadata for new file
         delimiter +
         'Content-Type: application/json\r\n\r\n' +
         dataToSave +
         close_delim;
-      */
     }
 
     try {
-      throw new Error("handleSaveToDrive needs refactoring for GIS");
+      const response = await fetch(uploadPath, {
+        method: httpMethod,
+        headers: {
+          'Authorization': `Bearer ${gisAccessToken}`,
+          'Content-Type': `multipart/related; boundary="${boundary}"` // Ensure boundary is quoted here
+        },
+        body: multipartRequestBody,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); // Try to parse error, default to empty obj
+        console.error('Drive API Error Response:', errorData);
+        throw new Error(`Drive API Error: ${response.status} ${response.statusText}. ${errorData?.error?.message || ''}`);
+      }
+
+      const responseData = await response.json();
+      const newFileId = responseData.id;
+      localStorage.setItem('tripJsonFileId', newFileId);
+      setExportStatus('✅ Saved to Drive');
+      console.log('File saved/updated with ID:', newFileId);
+
     } catch (error) {
       console.error('Error saving to Drive:', error);
-      setExportStatus(`❌ Save to Drive failed: ${error.message || (error.result?.error?.message) || 'Unknown error'}`);
-      if (error.result && error.result.error && error.result.error.code === 404 && fileId) {
+      // Attempt to check for specific Drive API error structure if available
+      const driveError = error.message?.includes("Drive API Error:") ? error.message :
+                         (error.result?.error?.message || error.message || 'Unknown error');
+      setExportStatus(`❌ Save to Drive failed: ${driveError}`);
+
+      // Check if the error from response.ok was a 404, and if we were trying to update
+      if (error.message && error.message.includes("404") && fileId) {
         localStorage.removeItem('tripJsonFileId');
         setExportStatus('❌ Save failed (File not found on Drive, try saving again to create a new file)');
       }
