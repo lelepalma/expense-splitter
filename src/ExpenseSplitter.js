@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogIn, LogOut, Save, FileUp } from 'lucide-react'; // Added Save, FileUp icons
+import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Added useCallback
+import { Plus, Edit2, Trash2, Users, Download, Upload, Calculator, LogIn, LogOut, Save, FileUp } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // Corrected import
 // import { gapi } from 'gapi-script'; // Removed gapi-script import
@@ -35,13 +35,14 @@ const ExpenseSplitter = () => {
   const [userInfo, setUserInfo] = useState(null);
   const [authInstance, setAuthInstance] = useState(null);
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
-  const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false); // New state for Load from Drive
+  const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false);
 
   // --- Google API Functions ---
-  const updateSigninStatus = (isSignedIn) => {
+  // Memoize updateSigninStatus
+  const updateSigninStatus = useCallback((isSignedIn) => {
     setIsAuthenticated(isSignedIn);
     if (isSignedIn) {
-      const currentUser = window.gapi.auth2.getAuthInstance().currentUser.get(); // window.gapi
+      const currentUser = window.gapi.auth2.getAuthInstance().currentUser.get();
       const profile = currentUser.getBasicProfile();
       setUserInfo({
         name: profile.getName(),
@@ -57,7 +58,7 @@ const ExpenseSplitter = () => {
       setTimeout(() => setExportStatus(''), 3000);
       console.log('User signed out.');
     }
-  };
+  }, [setExportStatus, setIsAuthenticated, setUserInfo]);
 
   const handleLoadFromDrive = async () => {
     if (!isAuthenticated || !window.gapi || !window.gapi.client || !window.gapi.client.drive) { // window.gapi
@@ -111,27 +112,25 @@ const ExpenseSplitter = () => {
     }
   };
 
-  const initClient = () => {
+  // Memoize initClient
+  const initClient = useCallback(() => {
     if (!window.gapi || !window.gapi.client || !window.gapi.auth2) {
       console.error("GAPI client or auth2 not available for initClient");
       setExportStatus("❌ Google API not loaded yet. Please wait or refresh.");
       setTimeout(() => setExportStatus(''), 5000);
       return;
     }
-    window.gapi.client.init({ // window.gapi
+    window.gapi.client.init({
       apiKey: API_KEY,
       clientId: GOOGLE_OAUTH_CLIENT_ID,
       discoveryDocs: DISCOVERY_DOCS,
       scope: SCOPES,
     }).then(() => {
-      const instance = window.gapi.auth2.getAuthInstance(); // window.gapi
+      const instance = window.gapi.auth2.getAuthInstance();
       setAuthInstance(instance);
-      // Listen for sign-in state changes
       instance.isSignedIn.listen(updateSigninStatus);
-      // Handle the initial sign-in state
       updateSigninStatus(instance.isSignedIn.get());
-      // Load Drive API
-      window.gapi.client.load('drive', 'v3').then(() => { // window.gapi
+      window.gapi.client.load('drive', 'v3').then(() => {
         console.log("Google Drive API loaded.");
       }).catch(err => {
         console.error("Error loading Google Drive API:", err);
@@ -145,7 +144,7 @@ const ExpenseSplitter = () => {
       setExportStatus(`❌ Error initializing Google Auth: ${error.message || 'Unknown error'}`);
       setTimeout(() => setExportStatus(''), 5000);
     });
-  };
+  }, [updateSigninStatus, setAuthInstance, setExportStatus]); // API_KEY, GOOGLE_OAUTH_CLIENT_ID, etc are module constants
 
   const handleSignIn = () => {
     if (authInstance) {
@@ -184,18 +183,14 @@ const ExpenseSplitter = () => {
   useEffect(() => {
     const checkGapiReady = () => {
       if (window.gapi && window.gapi.load && window.gapi.client) {
-        // GAPI is loaded and ready for client and auth2 library loading
         window.gapi.load('client:auth2', initClient);
       } else {
-        // GAPI not ready yet, schedule another check
-        // This simple timeout might not be the most robust, an interval or a global callback (if gapi.js supports it) would be better.
-        // For now, we assume the async defer script in index.html makes it available soon.
         console.warn("Google API not ready yet, retrying init in 500ms...");
         setTimeout(checkGapiReady, 500);
       }
     };
     checkGapiReady();
-  }, []); // Empty dependency array ensures this runs once on mount
+  }, [initClient]); // Added memoized initClient to dependency array
 
   const handleDownloadJson = async () => {
     setExportStatus('Preparing JSON download...');
