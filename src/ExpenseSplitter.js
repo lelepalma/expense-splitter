@@ -570,7 +570,7 @@ const handleLoadFromDrive = async () => {
       }
 
       // Expenses Ledger Table
-      const expenseHeaders = ["Date", "Payee", "Description", "Amount", ...participants];
+      const expenseHeaders = ["Data", "Pagante", "Descrizione", "Cifra", ...participants];
 
       // PDF-specific calculation for display
       const pdfParticipantTotals = {};
@@ -604,7 +604,7 @@ const handleLoadFromDrive = async () => {
 
       // Expenses Table Title
       doc.setFontSize(14);
-      doc.text("Expenses", 14, currentY);
+      doc.text("Transazioni", 14, currentY);
       currentY += 7; // Space before table starts
 
       // Prepare Total Balance Row for PDF display
@@ -616,7 +616,7 @@ const handleLoadFromDrive = async () => {
       const totalBalanceRow = [
         '', // Date
         '', // Payee
-        { content: 'Total Balance:', styles: { halign: 'right', fontStyle: 'bold'} }, // Description
+        { content: 'Totale:', styles: { halign: 'right', fontStyle: 'bold'} }, // Description
         { content: `€ ${totalExpensesSum.toFixed(2)}`, styles: { fontStyle: 'bold'} }, // Amount (Overall total)
         ...pdfParticipantTotalStrings.map(balStr => ({ content: balStr, styles: { fontStyle: 'bold'} })) // PDF specific totals
       ];
@@ -645,10 +645,10 @@ const handleLoadFromDrive = async () => {
       // let settlementsY = doc.lastAutoTable.finalY + 15; // Replaced by currentY
       currentY = doc.lastAutoTable.finalY + 15;
       doc.setFontSize(14);
-      doc.text("Settlements Summary", 14, currentY);
+      doc.text("Riepilogo", 14, currentY);
 
       if (settlements.length > 0) {
-        const settlementHeaders = ["From", "To", "Amount"];
+        const settlementHeaders = ["Da", "A", "Cifra"];
         const settlementRows = settlements.map(settlement => [
           settlement.from,
           settlement.to,
@@ -1287,7 +1287,7 @@ const handleLoadFromDrive = async () => {
                     <div className="w-auto px-3 h-10 bg-red-100 rounded-full flex items-center justify-center">
                       <span className="text-red-600 font-semibold text-sm">{settlement.from}</span>
                     </div>
-                    <span className="text-gray-600">deve a</span>
+                    <span className="text-gray-600">owes</span>
                     <div className="w-auto px-3 h-10 bg-green-100 rounded-full flex items-center justify-center">
                       <span className="text-green-600 font-semibold text-sm">{settlement.to}</span>
                     </div>
