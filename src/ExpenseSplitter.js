@@ -1287,7 +1287,7 @@ const handleLoadFromDrive = async () => {
                     <div className="w-auto px-3 h-10 bg-red-100 rounded-full flex items-center justify-center">
                       <span className="text-red-600 font-semibold text-sm">{settlement.from}</span>
                     </div>
-                    <span className="text-gray-600">owes</span>
+                    <span className="text-gray-600">deve a</span>
                     <div className="w-auto px-3 h-10 bg-green-100 rounded-full flex items-center justify-center">
                       <span className="text-green-600 font-semibold text-sm">{settlement.to}</span>
                     </div>
