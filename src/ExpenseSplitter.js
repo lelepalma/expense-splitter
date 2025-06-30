@@ -45,6 +45,7 @@ const ExpenseSplitter = () => {
   const [isLoadingFromDrive, setIsLoadingFromDrive] = useState(false);
   const [isPickerApiLoaded, setIsPickerApiLoaded] = useState(false);
   const [showMenu, setShowMenu] = useState(false); // State for the new menu
+  const [tripTitle, setTripTitle] = useState(''); // New state variable for trip title
 
   // --- Google API Functions --- (Old GAPI functions will be removed or refactored)
 
@@ -173,6 +174,7 @@ const handleLoadFromDrive = async () => {
     if (fileContent && Array.isArray(fileContent.participants) && Array.isArray(fileContent.expenses)) {
       setParticipants(fileContent.participants);
       setExpenses(fileContent.expenses);
+      setTripTitle(fileContent.tripTitle || ''); // Load tripTitle
       setExportStatus('✅ Data loaded from Drive');
       console.log('Data loaded from Drive:', fileContent);
     } else {
@@ -233,7 +235,7 @@ const handleLoadFromDrive = async () => {
   const handleDownloadJson = async () => {
     setExportStatus('Preparing JSON download...');
     try {
-      const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+      const dataToSave = JSON.stringify({ tripTitle, participants, expenses, balances, settlements }, null, 2); // Add tripTitle
       const blob = new Blob([dataToSave], { type: 'application/json' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -262,7 +264,7 @@ const handleLoadFromDrive = async () => {
     setIsSavingToDrive(true);
     setExportStatus('Saving to Drive...');
 
-    const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const dataToSave = JSON.stringify({ tripTitle, participants, expenses, balances, settlements }, null, 2); // Add tripTitle
     const fileId = localStorage.getItem('tripJsonFileId');
     const fileName = 'trip_expenses.json';
 
@@ -353,7 +355,7 @@ const handleLoadFromDrive = async () => {
     setIsSavingToDrive(true); // Use existing state for loading indicator
     setExportStatus(`Saving "${fileName}" to Drive...`);
 
-    const dataToSave = JSON.stringify({ participants, expenses, balances, settlements }, null, 2);
+    const dataToSave = JSON.stringify({ tripTitle, participants, expenses, balances, settlements }, null, 2); // Add tripTitle
     const boundary = '-------314159265358979323846';
     const delimiter = "\r\n--" + boundary + "\r\n";
     const close_delim = "\r\n--" + boundary + "--";
@@ -512,6 +514,7 @@ const handleLoadFromDrive = async () => {
                 if (fileContent && Array.isArray(fileContent.participants) && Array.isArray(fileContent.expenses)) {
                   setParticipants(fileContent.participants);
                   setExpenses(fileContent.expenses);
+                  setTripTitle(fileContent.tripTitle || ''); // Load tripTitle
                   localStorage.setItem('tripJsonFileId', file.id);
                   setExportStatus(`✅ Data loaded from "${file.name}" (ID: ${file.id}). Ready for Quick Save.`);
                   console.log('Data loaded from Drive via Picker:', fileContent);
@@ -554,6 +557,17 @@ const handleLoadFromDrive = async () => {
     setExportStatus('Exporting...');
     try {
       const doc = new jsPDF();
+      let currentY = 15; // Initial Y position
+
+      // Add Trip Title if it exists
+      if (tripTitle && tripTitle.trim() !== '') {
+        doc.setFontSize(18);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const textWidth = doc.getStringUnitWidth(tripTitle) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+        const textX = (pageWidth - textWidth) / 2;
+        doc.text(tripTitle, textX, currentY);
+        currentY += 10; // Add some space below the title
+      }
 
       // Expenses Ledger Table
       const expenseHeaders = ["Date", "Payee", "Description", "Amount", ...participants];
@@ -590,7 +604,8 @@ const handleLoadFromDrive = async () => {
 
       // Expenses Table Title
       doc.setFontSize(14);
-      doc.text("Expenses", 14, 15);
+      doc.text("Expenses", 14, currentY);
+      currentY += 7; // Space before table starts
 
       // Prepare Total Balance Row for PDF display
       const totalExpensesSum = expenses.reduce((sum, e) => sum + e.amount, 0);
@@ -611,7 +626,7 @@ const handleLoadFromDrive = async () => {
       doc.autoTable({
         head: [expenseHeaders],
         body: finalExpenseRows, // Use rows with PDF-specific display logic and totals
-        startY: 22, // Adjusted for title
+        startY: currentY, // Use dynamic Y position
         headStyles: { halign: 'center', fillColor: [22, 160, 133] },
         styles: { fontSize: 8, halign: 'center' },
         didDrawCell: (data) => {
@@ -627,9 +642,10 @@ const handleLoadFromDrive = async () => {
       });
 
       // Settlement Summary Table Title
-      let settlementsY = doc.lastAutoTable.finalY + 15;
+      // let settlementsY = doc.lastAutoTable.finalY + 15; // Replaced by currentY
+      currentY = doc.lastAutoTable.finalY + 15;
       doc.setFontSize(14);
-      doc.text("Settlements Summary", 14, settlementsY);
+      doc.text("Settlements Summary", 14, currentY);
 
       if (settlements.length > 0) {
         const settlementHeaders = ["From", "To", "Amount"];
@@ -642,7 +658,7 @@ const handleLoadFromDrive = async () => {
         doc.autoTable({
           head: [settlementHeaders],
           body: settlementRows,
-          startY: settlementsY + 7, // Adjusted for title
+          startY: currentY + 7, // Adjusted for title
           headStyles: { halign: 'center', fillColor: [22, 160, 133] },
           styles: { fontSize: 8, halign: 'center' },
         });
@@ -654,7 +670,7 @@ const handleLoadFromDrive = async () => {
         const textWidth = doc.getStringUnitWidth(text) * doc.internal.getFontSize() / doc.internal.scaleFactor;
         const pageWidth = doc.internal.pageSize.getWidth();
         const x = (pageWidth - textWidth) / 2;
-        doc.text(text, x, settlementsY + 7); // Positioned after title space
+        doc.text(text, x, currentY + 7); // Positioned after title space
       }
 
       doc.save('expense_report.pdf');
@@ -880,6 +896,7 @@ const handleLoadFromDrive = async () => {
           if (data.participants && data.expenses && Array.isArray(data.participants) && Array.isArray(data.expenses)) {
             setParticipants(data.participants);
             setExpenses(data.expenses);
+            setTripTitle(data.tripTitle || ''); // Load tripTitle
             setExportStatus('✅ Data imported successfully!');
             setTimeout(() => setExportStatus(''), 3000);
           } else {
@@ -973,6 +990,13 @@ const handleLoadFromDrive = async () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Trip Expense Splitter</h1>
+              <input
+                type="text"
+                value={tripTitle}
+                onChange={(e) => setTripTitle(e.target.value)}
+                placeholder="Enter Trip Title (e.g., Paris Getaway)"
+                className="text-xl font-semibold text-gray-700 mb-2 border-b-2 border-gray-300 focus:border-indigo-500 outline-none w-full sm:w-auto" // Added w-full sm:w-auto for responsiveness
+              />
               <p className="text-gray-600">Track and split expenses fairly among participants</p>
             </div>
             <div className="flex gap-2 flex-wrap items-center"> {/* Added items-center for alignment */}
