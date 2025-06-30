@@ -138,7 +138,7 @@ const ExpenseSplitter = () => {
         sessionStorage.setItem('google_auth_state_generated', state);
         console.log('Generated state for CSRF:', state);
 
-        const expectedRedirectUri = "https://lelepalma.github.io/expense-splitter/auth-callback.html";
+        const expectedRedirectUri = window.location.origin + '/auth-callback.html';
         const codeClient = window.google.accounts.oauth2.initCodeClient({
           client_id: GOOGLE_OAUTH_CLIENT_ID,
           scope: SCOPES,
@@ -226,7 +226,7 @@ const ExpenseSplitter = () => {
         sessionStorage.removeItem('google_auth_state_generated'); // Clean up state after successful validation
 
         setExportStatus('⏳ Exchanging authorization code for token...');
-        const expectedRedirectUri = "https://lelepalma.github.io/expense-splitter/auth-callback.html";
+        const expectedRedirectUri = window.location.origin + '/auth-callback.html';
         const tokenRequestBody = new URLSearchParams();
         tokenRequestBody.append('code', authCode);
         tokenRequestBody.append('client_id', GOOGLE_OAUTH_CLIENT_ID);
